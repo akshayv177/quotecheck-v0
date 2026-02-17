@@ -169,6 +169,10 @@ class QuoteCheckResult(BaseModel):
 class AnalyzeRequest(BaseModel):
     """
     Request payload for POST / analyze.
+    Accepts either 'quote_text' (preferred) or 'quoteText' (frontend-friendly)
 
     quote_text: the raw quote content pasted by the user.
     """
+    quote_text: str = Field(..., min_length=1, alias="quoteText", description="Raw service quote text pasted by the user.")
+
+    model_config = {"populate_by_name": True, "extra": "forbid"}
