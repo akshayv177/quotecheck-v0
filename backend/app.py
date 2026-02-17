@@ -160,7 +160,7 @@ def analyze(req: AnalyzeRequest):
             "Confirm whether the recommendation is OEM-specified or shop-suggested.",
         ],
         uncertainty_markers=UncertaintyMarkers(
-            ambigious_items_present=True,
+            ambiguous_items_present=True,
             missing_vehicle_context=True,
             needs_mechanic_confirmation=True,
         ),

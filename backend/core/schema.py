@@ -104,7 +104,7 @@ class UncertaintyMarkers(BaseModel):
     - eval tests ("did the system admit uncertainty when it should?")
     - logging and monitoring
     """
-    ambigious_items_present: bool
+    ambiguous_items_present: bool
     missing_vehicle_context: bool
     needs_mechanic_confirmation: bool
 
