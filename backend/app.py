@@ -197,7 +197,7 @@ def analyze(req: AnalyzeRequest):
         # ---- logging on success ----
         risk_counts = {"red": 0, "yellow": 0, "green": 0}
         for it in result.line_items:
-            rl = str(it.risk_level)
+            rl = it.risk_level.value if hasattr(it.risk_level, "value") else str(it.risk_level).lower()
             if rl in risk_counts:
                 risk_counts[rl] += 1
 
