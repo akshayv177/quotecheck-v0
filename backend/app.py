@@ -22,12 +22,16 @@ Notes
 
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv("backend/.env")
+
 import time
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 
 from backend.core.schema import (
     AnalyzeRequest,
@@ -42,10 +46,10 @@ from backend.core.schema import (
 )
 
 from backend.core.run_logger import log_app_run
+from backend.core.prompt import PROMPT_VERSION
+from backend.core.config import APP_RUN_LOG_PATH
 
-PROMPT_VERSION = "quotecheck_v0.1"
 DEFAULT_MODEL = "gpt-5-mini"    # placeholder for now; becomes real in block 3
-APP_RUN_LOG_PATH = "logs/app_runs.jsonl"
 
 app = FastAPI(title="QuoteCheck API", version="0.1.0")
 
