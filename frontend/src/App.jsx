@@ -174,17 +174,29 @@ export default function App() {
 }
 
 function RiskPill({ level }) {
-  const txt = String(level || "").toUpperCase();
-  const styles = {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 999,
-    fontSize: 12,
-    border: "1px solid #374151",
-    background: "#111827",
-    color: "#e5e7eb"
+  const l = String(level || "").toLowerCase();
+  const map = {
+    red:   { bg: "#7f1d1d", border: "#ef4444", fg: "#fee2e2", label: "RED" },
+    yellow:{ bg: "#78350f", border: "#f59e0b", fg: "#fffbeb", label: "YELLOW" },
+    green: { bg: "#064e3b", border: "#10b981", fg: "#d1fae5", label: "GREEN" }
   };
-  return <span style={styles}>{txt || "UNKNOWN"}</span>;
+  const c = map[l] || { bg: "#111827", border: "#374151", fg: "#e5e7eb", label: (l || "UNKNOWN").toUpperCase() };
+
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 10px",
+      borderRadius: 999,
+      fontSize: 12,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      background: c.bg,
+      color: c.fg,
+      border: `1px solid ${c.border}`
+    }}>
+      {c.label}
+    </span>
+  );
 }
 
 
