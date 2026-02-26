@@ -16,7 +16,7 @@ from openai import OpenAI
 from backend.core.config import MODEL, OPENAI_API_KEY
 from backend.core.prompt import PROMPT_VERSION, build_messages
 from backend.core.schema import QuoteCheckResult
-from backend.core.schema_export import quotecheck_result_schema_json
+from backend.core.schema_export import quotecheck_result_schema_obj, quotecheck_result_schema_json
 
 
 def analyze_quote_openai(*, quote_text: str, request_id: str) -> Tuple[QuoteCheckResult, int]:
@@ -26,14 +26,21 @@ def analyze_quote_openai(*, quote_text: str, request_id: str) -> Tuple[QuoteChec
     client = OpenAI(api_key=OPENAI_API_KEY)
 
     schema_str = quotecheck_result_schema_json()
-    schema_obj = json.loads(schema_str)
+    schema_obj = quotecheck_result_schema_obj()
     messages = build_messages(quote_text=quote_text, schema_json=schema_str)
 
     t0 = time.perf_counter()
     resp = client.responses.create(
         model=MODEL,
         input=messages,
-        text={"format": {"type": "json_schema", "strict": True, "schema": schema_obj}},
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": "QuoteCheckResult",
+                "strict": True,
+                "schema": schema_obj,
+                }
+            },
     )
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
