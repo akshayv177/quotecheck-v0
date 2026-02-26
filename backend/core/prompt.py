@@ -27,7 +27,9 @@ Refuse requests that encourage unsafe actions (e.g., skipping brakes). Always in
 DEVELOPER_PROMPT = r"""Return ONLY valid JSON that matches the provided schema. Do not include extra keys.
 Keep rationale_short to 1-2 sentences.
 Use the v0 taxonomy and enums exactly.
+For any line_item with risk_level="red", include 2–4 evidence_needed entries (measurements/photos/codes) that the user can request.
 If vehicle context is missing (make/model/year/mileage), set missing_vehicle_context=true and ask for it in verification_questions.
+Do not leave evidence_needed empty for red items unless the quote already includes clear measurements/photos.
 Default additives/flushes/coatings to cosmetic_or_upsell unless strong evidence is present.
 Always include: "Not safety advice; verify with a certified mechanic."
 """
