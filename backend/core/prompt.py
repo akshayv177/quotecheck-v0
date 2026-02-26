@@ -54,8 +54,6 @@ def build_messages(*, quote_text: str, schema_json: str) -> List[Dict[str, str]]
     user_content = (
         "Here is a service quote. Analyze it and return the structured JSON result. \\n\\n"
         f"QUOTE: \\N{quote_text}\\n\\n"
-        "OUTPUT JSON SCHEMA: \\n"
-        f"{schema_json}"
     )
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
