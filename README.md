@@ -8,7 +8,8 @@ QuoteCheck helps users understand messy vehicle service quotes by turning unstru
 
 This repo is deliberately built like a deployable LLM product:
 - **Schema-first contract** (Pydantic) → predictable UI + measurable reliability
-- **Observability** (JSONL run logs) → traceability per request
+- **Structured Outputs (OpenAI Responses API)** → JSON constrained by strict schema
+- **Observability (JSONL run logs)** → traceability per request (request_id, latency, schema_valid, risk_counts)
 - **Prompt/version discipline** → prompt changes are versioned “product changes”
 - **Config + `.env`** → clean local dev, secrets never committed
 
@@ -52,7 +53,7 @@ Open the URL Vite prints (usually `http://localhost:5173`) → paste a quote →
 
 ---
 
-## Configuration
+## Configuration (modes)
 
 We use an untracked `.env` for local settings and secrets.
 
@@ -63,10 +64,13 @@ cp backend/.env.example backend/.env
 ```
 
 2. Edit `backend/.env`:
+Stub mode (default, zero cost)
+* `QUOTECHECK_USE_OPENAI=0`
 
-* `QUOTECHECK_USE_OPENAI=0` (default; stub mode)
-* `OPENAI_API_KEY=...` (only needed when you enable OpenAI)
-* `QUOTECHECK_MODEL=...` (used when OpenAI is enabled)
+OpenAI mode (real model calls)
+* `QUOTECHECK_USE_OPENAI=1` 
+* `OPENAI_API_KEY=your_key_here` 
+* `QUOTECHECK_MODEL=gpt-40-mini`
 
 > `backend/.env` is gitignored. Never commit secrets.
 
@@ -110,15 +114,9 @@ FastAPI Backend
 logs/app_runs.jsonl  (append-only traces)
 ```
 
-Planned next step:
-
-* OpenAI **Responses API** + **Structured Outputs (strict JSON schema)** + bounded repair retry
-
----
-
 ## Observability (JSONL)
 
-Every `/analyze` call appends one line to:
+Every `/analyze` call appends one JSON line to:
 
 * `logs/app_runs.jsonl`
 
@@ -155,7 +153,7 @@ Schema export utility:
 
 ---
 
-## Repo structure
+## Repo structure (high level)
 
 ```
 backend/
@@ -166,6 +164,8 @@ backend/
     schema_export.py
     run_logger.py
     config.py
+    stub_analyzer.py
+    openai_analyzer.py
   .env.example
 
 frontend/
@@ -186,7 +186,7 @@ docs/   (coming next)
 - ✅ `/analyze` returns schema-valid response (stub mode)
 - ✅ React UI renders results table + cards + raw JSON
 - ✅ JSONL run logging + prompt version discipline
-- ✅ Config + dotenv workflow
+- ✅ Config + dotenv workflow (secrets untracked)
 
 ---
 
@@ -194,18 +194,17 @@ docs/   (coming next)
 
 * No authentication/users/DB
 * No PDF/OCR ingestion (paste text only)
-* Stub analyzer (OpenAI integration is next)
 * Eval harness not wired yet
+* Repair retry on schema failures is not added yet (planned)
 
 ---
 
 ## Roadmap
 
-1. OpenAI Responses API integration (structured outputs + strict schema)
-2. Pydantic validation + **bounded repair retry** for schema failures
-3. Eval harness: 10–20 quotes + JSONL results + summary metrics
-4. Cost controls: token caps, caching hooks, batch eval discount
-5. Product wedge: expanded taxonomy + evidence requirements + HITL workflow
+1. Add bounded repair retry (if model output fails Pydantic validation)
+2. Eval harness: 10–20 quotes -> JSONL results + summary.md metrics
+3. Cost controls: output token caps, shorter rationales, caching hooks, batch eval runs
+4. Product wedge: expanded taxonomy + evidence requirements + HITL workflows
 
 ---
 
