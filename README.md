@@ -64,6 +64,7 @@ cp backend/.env.example backend/.env
 ```
 
 2. Edit `backend/.env`:
+
 Stub mode (default, zero cost)
 * `QUOTECHECK_USE_OPENAI=0`
 
