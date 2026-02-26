@@ -182,10 +182,10 @@ docs/   (coming next)
 
 ## Current status (v0)
 
-- [x] Backend + frontend run locally
-- [x] `/analyze` returns schema-valid response (stub mode)
-- [x] React UI renders results table + cards + raw JSON
-- [x] JSONL run logging + prompt version discipline
+✅ Backend + frontend run locally
+✅ `/analyze` returns schema-valid response (stub mode)
+✅ React UI renders results table + cards + raw JSON
+✅ JSONL run logging + prompt version discipline
 - [x] Config + dotenv workflow
 
 ---
