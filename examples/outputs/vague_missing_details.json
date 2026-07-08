@@ -1,0 +1,49 @@
+{
+    "line_items": [
+        {
+            "name_raw": "Unclear item(s) - needs clarification",
+            "normalized_category": "unknown_needs_clarification",
+            "explanation": "The quote text lacks enough detail (e.g. part names, measurements) for this stub to explain what the charge covers or why it might be recommended.",
+            "vague_or_confusing": true,
+            "recommended_action": "unknown",
+            "risk_level": "yellow",
+            "confidence": 0.35,
+            "rationale_short": "The quote text lacks enough detail to classify items reliably. Ask the service center for an itemized breakdown.",
+            "price": null,
+            "evidence_needed": [
+                "Itemized parts + labor list",
+                "Reason for each recommendation"
+            ]
+        }
+    ],
+    "overall_summary": [
+        "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
+        "Any generically named, bundled, or unclear charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
+        "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
+    ],
+    "verification_questions": [
+        "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
+        "Which items are safety-critical vs optional preventive maintenance?",
+        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+    ],
+    "things_to_verify": [
+        "Request an itemized parts + labour breakdown for each line item.",
+        "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
+        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+    ],
+    "uncertainty_markers": {
+        "ambiguous_items_present": true,
+        "missing_vehicle_context": true,
+        "needs_mechanic_confirmation": true
+    },
+    "refusals": [],
+    "disclaimer": "QuoteCheck is a v0 prototype; results may be incomplete or wrong. Not safety advice; verify with a qualified professional. QuoteCheck explains quotes and suggests questions; it does not verify vendor claims, guarantee fair pricing, or perform price benchmarking.",
+    "metadata": {
+        "prompt_version": "quotecheck_v0.2",
+        "model": "quotecheck-demo-analyzer",
+        "created_at": "2026-07-08T16:00:13.370768Z",
+        "request_id": "eee7d0d7-fb48-4390-8756-f5100ac16a01",
+        "latency_ms": 0,
+        "schema_valid": true
+    }
+}

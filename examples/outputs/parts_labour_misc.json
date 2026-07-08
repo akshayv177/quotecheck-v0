@@ -1,41 +1,6 @@
 {
     "line_items": [
         {
-            "name_raw": "Brake service/ pads (from quote)",
-            "normalized_category": "safety_critical",
-            "explanation": "Brake pads are the friction material that presses on the rotor to slow the vehicle. A shop typically recommends replacement when pad thickness drops below a safe threshold or the rotor shows wear.",
-            "vague_or_confusing": false,
-            "recommended_action": "needs_inspection",
-            "risk_level": "red",
-            "confidence": 0.7,
-            "rationale_short": "Braking components are safety-critical. Ask for pad thickness and rotor condition evidence.",
-            "price": null,
-            "evidence_needed": [
-                "Pad thickness measurement (mm)",
-                "Rotor condition photo",
-                "Reason for replacement"
-            ]
-        },
-        {
-            "name_raw": "Tyre replacement (from quote)",
-            "normalized_category": "safety_critical",
-            "explanation": "Tyres are the vehicle's only contact with the road, so tread depth and condition affect braking, handling, and grip. A shop recommends replacement or rotation to keep wear even and maintain safe tread depth.",
-            "vague_or_confusing": false,
-            "recommended_action": "ask_for_evidence",
-            "risk_level": "yellow",
-            "confidence": 0.65,
-            "rationale_short": "Tyres affect braking and handling. Ask for tread depth and sidewall condition details.",
-            "price": {
-                "amount": 0.0,
-                "currency": "INR"
-            },
-            "evidence_needed": [
-                "Tread depth (mm)",
-                "Uneven wear explanation",
-                "Sidewall damage photo (if any)"
-            ]
-        },
-        {
             "name_raw": "Other/unspecified charges (from quote)",
             "normalized_category": "unknown_needs_clarification",
             "explanation": "The quote mentions one or more generically named or un-itemized charges (e.g. misc, labour, service charge, gas top-up). This stub cannot know what they specifically cover without an itemized breakdown from the vendor.",
@@ -53,7 +18,6 @@
     ],
     "overall_summary": [
         "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
-        "Safety-critical items (like brakes/tyres) should be verified with evidence before approval.",
         "Any generically named, bundled, or unclear charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
         "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
     ],
@@ -73,12 +37,12 @@
         "needs_mechanic_confirmation": true
     },
     "refusals": [],
-    "disclaimer": "QuoteCheck is a v0 prototype; results may be incomplete or wrong. Not safety advice; verify with a certified mechanic. QuoteCheck explains quotes and suggests questions; it does not verify vendor claims, guarantee fair pricing, or perform price benchmarking.",
+    "disclaimer": "QuoteCheck is a v0 prototype; results may be incomplete or wrong. Not safety advice; verify with a qualified professional. QuoteCheck explains quotes and suggests questions; it does not verify vendor claims, guarantee fair pricing, or perform price benchmarking.",
     "metadata": {
         "prompt_version": "quotecheck_v0.2",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-07-08T16:09:28.127130Z",
-        "request_id": "2984e1a9-599f-455b-ac0d-056d58f1c4b2",
+        "created_at": "2026-07-08T16:00:13.312665Z",
+        "request_id": "0dbce57d-a369-42a8-a2f8-2ba833ce8674",
         "latency_ms": 0,
         "schema_valid": true
     }

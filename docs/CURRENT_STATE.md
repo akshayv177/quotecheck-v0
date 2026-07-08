@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-007)
+Last updated: 2026-07-08 (TASK-008)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -16,10 +16,13 @@ JSONL log record per request.
 - `backend/core/schema.py` — Pydantic contract (`AnalyzeRequest`, `QuoteCheckResult`
   and nested models: line items, risk levels, uncertainty markers, refusals, metadata).
 - `backend/core/stub_analyzer.py` — deterministic keyword-heuristic analyzer
-  (default mode, zero cost, product-facing name "Demo mode"). Reports
-  `metadata.model = "quotecheck-demo-analyzer"` (`config.DEMO_ANALYZER_MODEL`), a
-  label distinct from `QUOTECHECK_MODEL`, so demo-mode responses and JSONL logs
-  never claim an OpenAI model was called.
+  (default mode, zero cost, product-facing name "Demo mode"). Recognizes vehicle
+  (brake/tyre), AC/appliance (air conditioning/compressor/refrigerant/hvac/appliance),
+  and home-maintenance/contractor (plumbing/electrical/contractor/handyman/
+  renovation) keywords, plus a generic vague-charge catch-all and a no-match
+  fallback (TASK-008). Reports `metadata.model = "quotecheck-demo-analyzer"`
+  (`config.DEMO_ANALYZER_MODEL`), a label distinct from `QUOTECHECK_MODEL`, so
+  demo-mode responses and JSONL logs never claim an OpenAI model was called.
 - `backend/core/openai_analyzer.py` — OpenAI Responses API with strict JSON-schema
   structured output, then Pydantic validation; server overrides metadata.
 - `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.2`),
@@ -98,13 +101,22 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   `quotecheck-demo-analyzer` in Demo mode, the configured `QUOTECHECK_MODEL` (e.g.
   `gpt-4o-mini`) in OpenAI mode. The frontend shows this as a "Demo mode" / "OpenAI
   mode" badge; the same value is also what gets written to `logs/app_runs.jsonl`.
-- Demo/stub mode (deterministic, vehicle-service keyword heuristics): brake → safety-
-  critical/red; tyre → safety-critical/yellow; generic/un-itemized terms (misc,
-  labour/labor, service charge, gas top-up, consumables, other/unitemized charges) →
-  a conservative "Other/unspecified charges" catch-all with `vague_or_confusing=true`,
-  independent of whether brake/tyre also matched, so those charges are surfaced
-  instead of silently dropped; else a single "needs clarification" item. This is
-  still keyword matching, not a real line-item parser/extractor.
+- Demo/stub mode (deterministic keyword heuristics, TASK-008 broadened beyond
+  vehicle-only): brake → safety-critical/red; tyre → safety-critical/yellow; AC/
+  appliance terms (air conditioning, compressor, refrigerant, hvac, appliance) →
+  wear-and-tear/yellow with appliance-appropriate evidence requests; home-maintenance
+  terms (plumbing, electrical, contractor, handyman, renovation) →
+  preventive-maintenance/green with scope-of-work evidence requests; generic/
+  un-itemized terms (misc, labour/labor, service charge, gas top-up, consumables,
+  other/unitemized charges) → a conservative "Other/unspecified charges" catch-all
+  with `vague_or_confusing=true`, independent of any other match, so those charges
+  are surfaced instead of silently dropped; else a single "needs clarification" item.
+  Top-level `overall_summary`/`verification_questions`/`things_to_verify`/
+  `disclaimer` text is domain-generic by default (e.g. "verify with a qualified
+  professional"), with vehicle-specific phrasing ("brakes/tyres", "certified
+  mechanic") only added when a vehicle item actually matched — no more asserting
+  vehicle language on a non-vehicle quote. This is still keyword matching, not a
+  real line-item parser/extractor or NLP.
 - OpenAI mode is implemented (strict structured outputs + Pydantic validation).
 - Frontend renders the full result as a quote-understanding report (explanation
   prominent per line item, vague/confusing charges visibly badged, verification
@@ -113,6 +125,12 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - Every request logs one JSONL record (request_id, prompt_version, model, latency,
   schema_valid, risk counts, uncertainty, error).
 - Secrets hygiene: `backend/.env` and `logs/` are gitignored and untracked.
+- `examples/` sample/eval pack (TASK-008): 6 real captured Demo-mode input/output
+  pairs spanning vehicle service, AC/appliance repair, home maintenance/contractor,
+  a vague-labour/misc parts quote, and a genuinely vague quote (uncertainty
+  fallback), indexed in `examples/README.md`. Demo mode only, no OpenAI calls; not
+  an automated eval harness (no pass/fail scoring, no CI) — see Roadmap item 2 in
+  `README.md`.
 
 ## Gaps
 
@@ -122,14 +140,52 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - No backend tests, no eval harness, no CI. `docs/` and `eval/` were empty until TASK-000.
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
-- Scope is vehicle-service-flavored (taxonomy, stub heuristics, prompt), narrower
-  than the SPEC.md target (general service / repair / parts / vendor quotes).
+- Scope is still narrower than the SPEC.md target (general service / repair / parts /
+  vendor quotes): the `NormalizedCategory` taxonomy and the OpenAI-mode prompt
+  (`backend/core/prompt.py`) remain vehicle-service-flavored. The Demo-mode stub's
+  keyword coverage was broadened in TASK-008 (vehicle, AC/appliance, home
+  maintenance) but is still a small fixed keyword list, not real language
+  understanding, and only covers Demo mode.
 - Price benchmarking does not exist.
 - Stub's generic-charge catch-all is a fixed keyword list, not real line-item
   extraction; a quote whose vague charges don't match one of those keywords still
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-008
+
+- `backend/core/stub_analyzer.py`: added deterministic keyword detection for AC/
+  appliance repair (`air conditioning`, `air conditioner`, `compressor`,
+  `refrigerant`, `hvac`, `appliance`) and home-maintenance/contractor work
+  (`plumbing`, `electrical`, `contractor`, `handyman`, `renovation`), each producing
+  a domain-appropriate `LineItem` (category, explanation, evidence_needed) the same
+  way the existing brake/tyre blocks do. Restructured the top-level
+  `overall_summary`/`verification_questions`/`things_to_verify`/`disclaimer` text to
+  be domain-generic by default (e.g. "verify with a qualified professional",
+  "manufacturer-specified or vendor-suggested" instead of "OEM-specified"), adding
+  vehicle-specific phrasing ("brakes/tyres", "certified mechanic") only when a
+  vehicle item actually matched — non-vehicle Demo-mode responses no longer assert
+  vehicle-specific language. `overall_summary` stays within the schema's 3–5 item
+  bound in all cases (3 generic entries, or 4 with the vehicle-specific line
+  inserted). No change to `backend/core/schema.py`, `backend/core/openai_analyzer.py`,
+  `backend/core/prompt.py` (OpenAI-mode prompt is unchanged), or any frontend file.
+  The existing `examples/sample_output.json` (TASK-007) still validates against
+  `QuoteCheckResult` after this change (re-checked as a regression test); its exact
+  wording now differs slightly from a fresh run's `overall_summary`/`disclaimer`
+  text (reordered/reworded, not regenerated as part of this ticket).
+- `examples/` sample/eval pack: 5 new realistic input files
+  (`quote_vehicle_service.txt`, `quote_ac_repair.txt`, `quote_home_maintenance.txt`,
+  `quote_parts_labour_misc.txt`, `quote_vague_missing_details.txt`) each with a real
+  captured Demo-mode `/analyze` response under `examples/outputs/` (not
+  hand-written), validated against `QuoteCheckResult`. `examples/README.md` (new)
+  indexes all 6 examples (including the original TASK-007 sample) and states
+  plainly that Demo mode is a deterministic keyword stub (not an LLM), these are
+  real outputs, and no price benchmarking or market evidence is implemented.
+- `README.md`: added a link to `examples/README.md` near the existing sample-report
+  excerpt, and listed the new `examples/` files in the "Repo structure" tree. No
+  other prose changes.
+- No frontend changes, no OpenAI-mode calls made, no new dependencies.
 
 ### Fixed in TASK-007
 
