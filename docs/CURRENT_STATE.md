@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-010)
+Last updated: 2026-07-09 (TASK-010A)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -169,6 +169,17 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
 
+### Fixed in TASK-010A
+
+- `README.md`: reframed the README design-rationale section under a neutral
+  "Design notes" heading. The prior heading framed the project's engineering
+  choices as credibility proof rather than stating them plainly; the underlying
+  factual content (schema-first API responses, deterministic Demo mode, optional
+  OpenAI mode, structured/reviewable report sections, JSONL request logs, honest
+  limitations) is preserved, just restated as plain design choices with a link to
+  `docs/PROJECT_STATUS.md`. No other README section changed.
+- No backend/frontend/example-output changes; no new dependencies.
+
 ### Fixed in TASK-010
 
 - Added `docs/PROJECT_STATUS.md` (new): a neutral summary of what's public-ready
@@ -300,14 +311,15 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 
 ### Fixed in TASK-007
 
-- `README.md`: rewritten for a public/portfolio audience. Now opens with a "what /
+- `README.md`: rewritten for a general public audience. Now opens with a "what /
   who / why" product framing before any setup or architecture detail (previously led
   with an engineering-tooling bullet list). Adds a "What a report looks like" section
   with a real Demo-mode excerpt plus links to new `examples/` files, a "Screenshot"
   placeholder section (no screenshot committed — no headless-browser tooling is
-  installed and adding one would be a new dependency, out of scope), and a "Why this
-  is portfolio-credible" section (schema-first contract, honest mode labeling, JSONL
-  observability, ticket/review-bundle discipline). Setup steps now explicitly state
+  installed and adding one would be a new dependency, out of scope), and a design-
+  rationale section (schema-first contract, honest mode labeling, JSONL
+  observability, ticket/review-bundle discipline; reframed under a neutral "Design
+  notes" heading in TASK-010A). Setup steps now explicitly state
   the backend requires an activated Python environment and that no
   `environment.yml`/lockfile is committed (only pinned `backend/requirements.txt`);
   this reproducibility gap is also called out in the Limitations section. No setup
