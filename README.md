@@ -4,6 +4,11 @@ QuoteCheck helps users understand messy vehicle service quotes by turning unstru
 
 > Disclaimer: **Not safety advice; verify with a certified mechanic.**
 
+> **No OpenAI API key needed to try this.** QuoteCheck defaults to a deterministic
+> **Demo mode** (`QUOTECHECK_USE_OPENAI=0`) that returns a full, schema-valid
+> quote-understanding report with zero cost and zero credentials. Real OpenAI calls
+> are opt-in — see [Configuration (modes)](#configuration-modes) below.
+
 ---
 
 This repo is deliberately built like a deployable LLM product:
@@ -16,6 +21,10 @@ This repo is deliberately built like a deployable LLM product:
 ---
 
 ## Demo (local)
+
+No `backend/.env` file and no OpenAI API key are required for these steps — if
+`backend/.env` doesn't exist, the app falls back to its built-in defaults, which is
+**Demo mode** (`QUOTECHECK_USE_OPENAI=0`).
 
 ### Prereqs
 - Python 3.11 (conda recommended)
@@ -48,13 +57,18 @@ npm install
 npm run dev -- --host
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`) → paste a quote → **Analyze**.
+Open the URL Vite prints (usually `http://localhost:5173`) → the textarea is
+pre-filled with a sample quote → click **Analyze quote** → see the full
+quote-understanding report, with a **"Demo mode"** badge next to the run metadata
+confirming no OpenAI call was made.
 
 ---
 
 ## Configuration (modes)
 
-We use an untracked `.env` for local settings and secrets.
+Local settings and secrets live in an untracked `backend/.env` file. You do **not**
+need to create one to try Demo mode — it's the default. Create one only if you want
+to switch to OpenAI mode:
 
 1. Copy example:
 
@@ -64,13 +78,18 @@ cp backend/.env.example backend/.env
 
 2. Edit `backend/.env`:
 
-Stub mode (default, zero cost)
+Demo mode — deterministic stub analyzer, default, zero cost, no key required
 * `QUOTECHECK_USE_OPENAI=0`
 
-OpenAI mode (real model calls)
+OpenAI mode — real model calls, requires a key
 * `QUOTECHECK_USE_OPENAI=1` 
 * `OPENAI_API_KEY=your_key_here` 
 * `QUOTECHECK_MODEL=gpt-4o-mini`
+
+The frontend badge and the `metadata.model` field in every `/analyze` response
+reflect whichever mode actually served the request (`quotecheck-demo-analyzer` in
+Demo mode, the configured `QUOTECHECK_MODEL` in OpenAI mode) — so it's never
+ambiguous which one produced a given report.
 
 > `backend/.env` is gitignored. Never commit secrets.
 
@@ -107,7 +126,7 @@ Browser (React)
 FastAPI Backend
   - request_id, latency
   - schema contract (Pydantic)
-  - (v0) stub analyzer
+  - (v0) stub analyzer (Demo mode, default) / OpenAI analyzer (opt-in)
   - JSONL run logging
   |
   v
@@ -183,8 +202,8 @@ docs/   (coming next)
 ## Current status (v0)
 
 - ✅ Backend + frontend run locally
-- ✅ `/analyze` returns schema-valid response (stub mode)
-- ✅ React UI renders results table + cards + raw JSON
+- ✅ `/analyze` returns schema-valid response (Demo mode, no API key needed)
+- ✅ React UI renders results table + cards + raw JSON, with a Demo/OpenAI mode badge
 - ✅ JSONL run logging + prompt version discipline
 - ✅ Config + dotenv workflow (secrets untracked)
 

@@ -25,6 +25,12 @@ USE_OPENAI = os.environ.get("QUOTECHECK_USE_OPENAI", "0") == "1"
 # Model selection (used once we integrate OpenAI)
 MODEL = os.environ.get("QUOTECHECK_MODEL", "gpt-4o-mini")
 
+# Label reported in MetaData.model when running the deterministic stub/demo
+# analyzer (QUOTECHECK_USE_OPENAI=0, the default). Deliberately distinct from
+# MODEL/QUOTECHECK_MODEL so stub-mode responses and logs never claim an OpenAI
+# model was called when it wasn't.
+DEMO_ANALYZER_MODEL = "quotecheck-demo-analyzer"
+
 # Observability
 APP_RUN_LOG_PATH = os.environ.get("QUOTECHECK_LOG_PATH", "logs/app_runs.jsonl")
 

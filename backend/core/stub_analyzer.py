@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from backend.core.config import MODEL
+from backend.core.config import DEMO_ANALYZER_MODEL
 from backend.core.prompt import PROMPT_VERSION
 from backend.core.schema import (
     LineItem,
@@ -190,7 +190,7 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         ),
         metadata=MetaData(
             prompt_version=PROMPT_VERSION,
-            model=MODEL,
+            model=DEMO_ANALYZER_MODEL,
             created_at=datetime.now(timezone.utc),
             request_id=request_id,
             latency_ms=latency_ms,

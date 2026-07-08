@@ -20,11 +20,19 @@
  * an elapsed-time readout, a client-side request timeout via AbortController,
  * and error copy differentiated by failure kind. No `/analyze` payload or
  * response-shape change.
+ *
+ * TASK-006: mock/demo mode. The backend now reports an honest
+ * `metadata.model` value in stub mode (`quotecheck-demo-analyzer` instead of
+ * an OpenAI model name); this adds a small "Demo mode" / "OpenAI mode" badge
+ * next to the metadata footer line, driven purely by that value. No other
+ * data-flow or `/analyze` change.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const API_BASE = "http://localhost:8000";
+
+const DEMO_ANALYZER_MODEL = "quotecheck-demo-analyzer";
 
 const REQUEST_TIMEOUT_MS = 55_000; // ~2.75x the ~20s typical real-LLM-mode latency
 
@@ -307,12 +315,20 @@ export default function App() {
 
             <div style={{
               marginTop: 10,
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              fontSize: 12,
-              color: "var(--ink-3)"
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 8
             }}>
-              request_id: {result.metadata?.request_id} · prompt_version: {result.metadata?.prompt_version}
-              {" "}· model: {result.metadata?.model} · latency_ms: {result.metadata?.latency_ms}
+              <ModeBadge model={result.metadata?.model} />
+              <div style={{
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                fontSize: 12,
+                color: "var(--ink-3)"
+              }}>
+                request_id: {result.metadata?.request_id} · prompt_version: {result.metadata?.prompt_version}
+                {" "}· model: {result.metadata?.model} · latency_ms: {result.metadata?.latency_ms}
+              </div>
             </div>
 
             <details style={{ marginTop: 14 }}>
@@ -431,6 +447,18 @@ function RiskPill({ level }) {
 
 function VagueBadge() {
   return <Pill bg="var(--vague-bg)" border="var(--vague-border)" fg="var(--vague-fg)" label="Needs clarification" />;
+}
+
+function ModeBadge({ model }) {
+  const isDemo = model === DEMO_ANALYZER_MODEL;
+  return (
+    <Pill
+      bg="var(--surface)"
+      border="var(--border)"
+      fg="var(--ink-3)"
+      label={isDemo ? "Demo mode" : "OpenAI mode"}
+    />
+  );
 }
 
 function Card({ title, children }) {

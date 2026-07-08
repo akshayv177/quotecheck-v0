@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-005)
+Last updated: 2026-07-08 (TASK-006)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -16,15 +16,20 @@ JSONL log record per request.
 - `backend/core/schema.py` — Pydantic contract (`AnalyzeRequest`, `QuoteCheckResult`
   and nested models: line items, risk levels, uncertainty markers, refusals, metadata).
 - `backend/core/stub_analyzer.py` — deterministic keyword-heuristic analyzer
-  (default mode, zero cost).
+  (default mode, zero cost, product-facing name "Demo mode"). Reports
+  `metadata.model = "quotecheck-demo-analyzer"` (`config.DEMO_ANALYZER_MODEL`), a
+  label distinct from `QUOTECHECK_MODEL`, so demo-mode responses and JSONL logs
+  never claim an OpenAI model was called.
 - `backend/core/openai_analyzer.py` — OpenAI Responses API with strict JSON-schema
   structured output, then Pydantic validation; server overrides metadata.
 - `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.2`),
   explanation-first: every line item must carry a plain-English `explanation` before
   risk judgment, and vague/bundled charges must be flagged via `vague_or_confusing`.
 - `backend/core/config.py` — env-var config: `QUOTECHECK_USE_OPENAI`, `QUOTECHECK_MODEL`
-  (default `gpt-4o-mini`), `QUOTECHECK_LOG_PATH`, `OPENAI_API_KEY`. Loaded from
-  untracked `backend/.env` (template: `backend/.env.example`).
+  (default `gpt-4o-mini`), `QUOTECHECK_LOG_PATH`, `OPENAI_API_KEY`, and
+  `DEMO_ANALYZER_MODEL` (fixed label, not env-configurable). Loaded from untracked
+  `backend/.env` (template: `backend/.env.example`); if `backend/.env` doesn't exist
+  at all, the app still runs — defaults are `QUOTECHECK_USE_OPENAI=0` (Demo mode).
 - `backend/core/run_logger.py` / `logs/app_runs.jsonl` — append-only JSONL run logs.
 - `backend/core/schema_export.py` — JSON Schema export used by the OpenAI analyzer.
 - `frontend/src/App.jsx` — entire UI: textarea → Analyze → quote-understanding
@@ -41,7 +46,10 @@ JSONL log record per request.
   label and elapsed-time counter, `aria-live="polite"`) and a styled error
   card (copy differentiated by timeout/network/HTTP/other failure kind)
   replace the earlier button-label-only loading and single generic error
-  message. Requests time out client-side after 55s via `AbortController`.
+  message. Requests time out client-side after 55s via `AbortController`. A small
+  "Demo mode" / "OpenAI mode" badge (`ModeBadge`, built on the existing `Pill`
+  primitive) sits next to the run-metadata line, derived from
+  `result.metadata.model` — no separate flag or endpoint.
   Single light theme (`frontend/src/index.css` token set); no dark mode.
   React 19 + Vite 7.
 
@@ -75,8 +83,10 @@ Logs:
 tail -n 1 logs/app_runs.jsonl | python3 -m json.tool
 ```
 
-Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
-(default) = stub mode, `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
+Modes: no `backend/.env` file is required to run in Demo mode — it's the default
+with zero setup. To switch modes explicitly, copy `backend/.env.example` to
+`backend/.env`; `QUOTECHECK_USE_OPENAI=0` (default) = Demo mode (stub analyzer,
+no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 
 ## Capabilities
 
@@ -84,7 +94,11 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
   `LineItem` carries a plain-English `explanation` (what the item is and why a vendor
   might recommend it, distinct from the risk-focused `rationale_short`) and an
   explicit `vague_or_confusing` flag, in addition to category/risk/action/evidence.
-- Stub mode (deterministic, vehicle-service keyword heuristics): brake → safety-
+- Every response's `metadata.model` honestly identifies which analyzer produced it:
+  `quotecheck-demo-analyzer` in Demo mode, the configured `QUOTECHECK_MODEL` (e.g.
+  `gpt-4o-mini`) in OpenAI mode. The frontend shows this as a "Demo mode" / "OpenAI
+  mode" badge; the same value is also what gets written to `logs/app_runs.jsonl`.
+- Demo/stub mode (deterministic, vehicle-service keyword heuristics): brake → safety-
   critical/red; tyre → safety-critical/yellow; generic/un-itemized terms (misc,
   labour/labor, service charge, gas top-up, consumables, other/unitemized charges) →
   a conservative "Other/unspecified charges" catch-all with `vague_or_confusing=true`,
@@ -113,6 +127,31 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-006
+
+- `backend/core/config.py`: added `DEMO_ANALYZER_MODEL = "quotecheck-demo-analyzer"`,
+  a fixed label distinct from `MODEL`/`QUOTECHECK_MODEL`.
+- `backend/core/stub_analyzer.py`: `MetaData.model` now uses `DEMO_ANALYZER_MODEL`
+  instead of `MODEL`. Previously, stub-mode responses (and their
+  `logs/app_runs.jsonl` entries) reported `model: "gpt-4o-mini"` even though no
+  OpenAI call was made — misleading for a public demo and inconsistent with
+  SPEC.md's honest-limitation-language principle. OpenAI mode is unchanged (still
+  reports the real configured model).
+- `frontend/src/App.jsx`: added a small `ModeBadge` (built on the existing `Pill`
+  primitive) next to the run-metadata footer line, reading "Demo mode" when
+  `metadata.model === "quotecheck-demo-analyzer"`, else "OpenAI mode". No other
+  UI, loading/error, or `/analyze` request/response change.
+- `README.md`: added an explicit "no OpenAI API key needed" callout near the top,
+  clarified the Demo-mode-first walkthrough (no `backend/.env` required), and
+  renamed "stub mode" to the product-facing "Demo mode" throughout the prose
+  (internal code identifiers — `QUOTECHECK_USE_OPENAI`, `stub_analyzer.py`,
+  `analyze_quote_stub` — are unchanged).
+- `backend/.env.example`: clarifying comment that Demo mode needs no key and no
+  `.env` file at all; no functional change.
+- No new dependencies; no changes to `backend/app.py`,
+  `backend/core/openai_analyzer.py`, `backend/core/schema.py`,
+  `backend/core/prompt.py`, or the `/analyze` request/response shape.
 
 ### Fixed in TASK-005
 
