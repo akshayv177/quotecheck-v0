@@ -99,6 +99,10 @@ silently passing them through. Every response also includes `overall_summary`,
 `verification_questions` ("questions to ask the vendor"), `things_to_verify`, explicit
 `uncertainty_markers`, and a mandatory disclaimer.
 
+More sample reports — vehicle service, AC/appliance repair, home maintenance/
+contractor, a vague-charges parts quote, and a genuinely vague quote — are in
+[`examples/README.md`](examples/README.md), each a real captured Demo-mode response.
+
 ## Screenshot
 
 *(No screenshot committed yet.)* To add one: run the backend + frontend steps above,
@@ -267,8 +271,20 @@ frontend/
   src/App.jsx
 
 examples/
+  README.md
   sample_quote.txt
   sample_output.json
+  quote_vehicle_service.txt
+  quote_ac_repair.txt
+  quote_home_maintenance.txt
+  quote_parts_labour_misc.txt
+  quote_vague_missing_details.txt
+  outputs/
+    vehicle_service.json
+    ac_repair.json
+    home_maintenance.json
+    parts_labour_misc.json
+    vague_missing_details.json
 
 logs/
   app_runs.jsonl

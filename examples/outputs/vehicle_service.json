@@ -77,8 +77,8 @@
     "metadata": {
         "prompt_version": "quotecheck_v0.2",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-07-08T16:09:28.127130Z",
-        "request_id": "2984e1a9-599f-455b-ac0d-056d58f1c4b2",
+        "created_at": "2026-07-08T16:00:13.139773Z",
+        "request_id": "d81f1bae-2e14-4065-8645-58da013b060a",
         "latency_ms": 0,
         "schema_valid": true
     }

@@ -1,0 +1,50 @@
+{
+    "line_items": [
+        {
+            "name_raw": "Home maintenance/contractor work (from quote)",
+            "normalized_category": "preventive_maintenance",
+            "explanation": "General home maintenance or contractor work (e.g. plumbing, electrical, or handyman tasks) covers a wide range of possible scope. A contractor typically recommends it based on a site visit or inspection rather than a fixed catalog part.",
+            "vague_or_confusing": false,
+            "recommended_action": "consider",
+            "risk_level": "green",
+            "confidence": 0.5,
+            "rationale_short": "Home maintenance scope varies by property; ask for a written scope of work before approving.",
+            "price": null,
+            "evidence_needed": [
+                "Scope-of-work breakdown by task",
+                "Materials list with quantities",
+                "Labor hours estimate"
+            ]
+        }
+    ],
+    "overall_summary": [
+        "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
+        "Any generically named, bundled, or unclear charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
+        "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
+    ],
+    "verification_questions": [
+        "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
+        "Which items are safety-critical vs optional preventive maintenance?",
+        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+    ],
+    "things_to_verify": [
+        "Request an itemized parts + labour breakdown for each line item.",
+        "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
+        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+    ],
+    "uncertainty_markers": {
+        "ambiguous_items_present": true,
+        "missing_vehicle_context": true,
+        "needs_mechanic_confirmation": true
+    },
+    "refusals": [],
+    "disclaimer": "QuoteCheck is a v0 prototype; results may be incomplete or wrong. Not safety advice; verify with a licensed contractor. QuoteCheck explains quotes and suggests questions; it does not verify vendor claims, guarantee fair pricing, or perform price benchmarking.",
+    "metadata": {
+        "prompt_version": "quotecheck_v0.2",
+        "model": "quotecheck-demo-analyzer",
+        "created_at": "2026-07-08T16:00:13.258137Z",
+        "request_id": "a88443f6-5b4b-47d0-b68b-f266f9d431f5",
+        "latency_ms": 0,
+        "schema_valid": true
+    }
+}

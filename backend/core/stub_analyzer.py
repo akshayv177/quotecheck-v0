@@ -28,10 +28,51 @@ from backend.core.schema import (
     UncertaintyMarkers,
 )
 
+AC_APPLIANCE_TERMS = [
+    "air conditioning",
+    "air conditioner",
+    "compressor",
+    "refrigerant",
+    "hvac",
+    "appliance",
+]
+
+HOME_MAINTENANCE_TERMS = [
+    "plumbing",
+    "electrical",
+    "contractor",
+    "handyman",
+    "renovation",
+]
+
+GENERIC_CHARGE_TERMS = [
+    "misc",
+    "miscellaneous",
+    "labour",
+    "labor",
+    "service charge",
+    "gas top-up",
+    "consumables",
+    "other charges",
+    "unitemized charges",
+]
+
+
+def _verifying_professional(*, vehicle_matched: bool, ac_matched: bool, home_matched: bool) -> str:
+    """Pick domain-appropriate wording for who the user should verify with."""
+    if vehicle_matched:
+        return "certified mechanic"
+    if ac_matched:
+        return "certified technician"
+    if home_matched:
+        return "licensed contractor"
+    return "qualified professional"
+
 
 def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> QuoteCheckResult:
     """
-    Analyze a quote using simple heuristics and return a schema-valid QuoteCheckResult.
+    Analyze a quote using simple keyword heuristics and return a schema-valid
+    QuoteCheckResult.
 
     Parameters
     ----------
@@ -49,6 +90,10 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
     """
     text_lower = quote_text.lower()
     items = []
+
+    vehicle_matched = "brake" in text_lower or "tyre" in text_lower or "tire" in text_lower
+    ac_matched = any(term in text_lower for term in AC_APPLIANCE_TERMS)
+    home_matched = any(term in text_lower for term in HOME_MAINTENANCE_TERMS)
 
     if "brake" in text_lower:
         items.append(
@@ -100,18 +145,57 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
             )
         )
 
-    generic_charge_terms = [
-        "misc",
-        "miscellaneous",
-        "labour",
-        "labor",
-        "service charge",
-        "gas top-up",
-        "consumables",
-        "other charges",
-        "unitemized charges",
-    ]
-    if any(term in text_lower for term in generic_charge_terms):
+    if ac_matched:
+        items.append(
+            LineItem(
+                name_raw="AC/appliance repair (from quote)",
+                normalized_category=NormalizedCategory.wear_and_tear,
+                explanation=(
+                    "An AC compressor or refrigerant charge is part of an appliance's "
+                    "cooling system. A technician typically recommends this when "
+                    "cooling output drops, the system is losing refrigerant, or a "
+                    "diagnostic points to a failing component."
+                ),
+                vague_or_confusing=False,
+                recommended_action=RecommendedAction.ask_for_evidence,
+                risk_level=RiskLevel.yellow,
+                confidence=0.55,
+                rationale_short="Appliance/HVAC repair scope varies widely; ask for a diagnostic report before approving.",
+                price=None,
+                evidence_needed=[
+                    "Diagnostic report or fault code",
+                    "Unit model/serial number and warranty status",
+                    "Refrigerant type and quantity used (if applicable)",
+                ],
+            )
+        )
+
+    if home_matched:
+        items.append(
+            LineItem(
+                name_raw="Home maintenance/contractor work (from quote)",
+                normalized_category=NormalizedCategory.preventive_maintenance,
+                explanation=(
+                    "General home maintenance or contractor work (e.g. plumbing, "
+                    "electrical, or handyman tasks) covers a wide range of possible "
+                    "scope. A contractor typically recommends it based on a site "
+                    "visit or inspection rather than a fixed catalog part."
+                ),
+                vague_or_confusing=False,
+                recommended_action=RecommendedAction.consider,
+                risk_level=RiskLevel.green,
+                confidence=0.50,
+                rationale_short="Home maintenance scope varies by property; ask for a written scope of work before approving.",
+                price=None,
+                evidence_needed=[
+                    "Scope-of-work breakdown by task",
+                    "Materials list with quantities",
+                    "Labor hours estimate",
+                ],
+            )
+        )
+
+    if any(term in text_lower for term in GENERIC_CHARGE_TERMS):
         items.append(
             LineItem(
                 name_raw="Other/unspecified charges (from quote)",
@@ -158,23 +242,33 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
             )
         )
 
+    overall_summary = [
+        "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
+        "Any generically named, bundled, or unclear charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
+        "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made.",
+    ]
+    if vehicle_matched:
+        overall_summary.insert(
+            1,
+            "Safety-critical items (like brakes/tyres) should be verified with evidence before approval.",
+        )
+
+    professional = _verifying_professional(
+        vehicle_matched=vehicle_matched, ac_matched=ac_matched, home_matched=home_matched
+    )
+
     return QuoteCheckResult(
         line_items=items,
-        overall_summary=[
-            "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
-            "Safety-critical items (like brakes/tyres) should be verified with evidence before approval.",
-            "Any generically named or bundled charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
-            "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made.",
-        ],
+        overall_summary=overall_summary,
         verification_questions=[
-            "Can you share photos/measurements that justify each recommended item?",
+            "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
             "Which items are safety-critical vs optional preventive maintenance?",
-            "Confirm whether the recommendation is OEM-specified or shop-suggested.",
+            "Confirm whether the recommendation is manufacturer-specified or vendor-suggested.",
         ],
         things_to_verify=[
             "Request an itemized parts + labour breakdown for each line item.",
-            "Ask for measurements (pad thickness, tread depth) where applicable.",
-            "Confirm whether the recommendation is OEM-specified or shop-suggested.",
+            "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
+            "Confirm whether the recommendation is manufacturer-specified or vendor-suggested.",
         ],
         uncertainty_markers=UncertaintyMarkers(
             ambiguous_items_present=True,
@@ -184,7 +278,7 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         refusals=[],
         disclaimer=(
             "QuoteCheck is a v0 prototype; results may be incomplete or wrong. "
-            "Not safety advice; verify with a certified mechanic. QuoteCheck "
+            f"Not safety advice; verify with a {professional}. QuoteCheck "
             "explains quotes and suggests questions; it does not verify vendor "
             "claims, guarantee fair pricing, or perform price benchmarking."
         ),
