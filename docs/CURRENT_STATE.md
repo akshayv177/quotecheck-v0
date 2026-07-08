@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-008A)
+Last updated: 2026-07-08 (TASK-009)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -59,16 +59,19 @@ JSONL log record per request.
 ## Commands
 
 Backend (from repo root; deps pinned in `backend/requirements.txt`, verified against
-a clean venv on Python 3.10 and a conda env on Python 3.11):
+a clean venv on Python 3.10 and a conda env on Python 3.11; TASK-009 re-verified the
+plain-venv path end-to-end from a clean working-tree copy):
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
-uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
+QUOTECHECK_USE_OPENAI=0 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 curl http://localhost:8000/health
 ```
 
-(The README additionally suggests a conda env; any Python 3.10+ environment with
-`backend/requirements.txt` installed works.)
+(The README also documents conda as an alternative; any Python 3.10+ environment with
+`backend/requirements.txt` installed works. README's quickstart leads with plain `venv`
+as of TASK-009 since it's more universal than assuming conda is installed.)
 
 Frontend:
 
@@ -158,6 +161,44 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-009
+
+- `README.md`: added a missing `git clone` step (`0) Clone`) before the backend
+  quickstart — previously the walkthrough started at "From repo root" with no clone
+  instructions at all. Swapped the primary backend quickstart from conda-first to plain
+  `python3 -m venv` (conda kept as a one-line alternative, not removed) since it's more
+  universal for a stranger who may not have conda installed and matches what was actually
+  validated below. Added an explicit `QUOTECHECK_USE_OPENAI=0` prefix on the `uvicorn` run
+  command so the no-paid-call guarantee is visible in the command itself, not only in
+  prose. Added a literal `curl -X POST /analyze` example (against
+  `examples/quote_ac_repair.txt`) so Demo-mode analysis is verifiable without opening the
+  frontend. Added `backend/requirements.txt` to the "Repo structure" tree. Updated the
+  Limitations section's environment-reproducibility note from "conda steps above" to
+  "`venv` or conda steps above". No other prose changes; no product/UI/analyzer behavior
+  changed.
+- Verified the full clean-room setup path end-to-end from a temporary `rsync` copy of the
+  working tree at `/tmp/quotecheck-v0-setup-test` (outside the repo; excluded `.git`,
+  `node_modules`, `.venv`, `logs`, `backend/.env`) — not a `git clone` of the public
+  GitHub remote, because this ticket's doc edits are uncommitted and out of scope forbids
+  commits, so a public clone would only have validated the pre-TASK-009 docs. Confirmed:
+  `pip install -r backend/requirements.txt` succeeds in a fresh venv with versions
+  matching the pins exactly; `python -c "from backend.app import app"` imports cleanly;
+  the server starts with `QUOTECHECK_USE_OPENAI=0` and serves `/health` (`{"status":
+  "ok"}`) and a real `/analyze` call against `examples/quote_ac_repair.txt`
+  (`metadata.model == "quotecheck-demo-analyzer"`, no OpenAI call); `frontend/`
+  `npm install` (157 packages) and `npm run build` both succeed. See
+  `docs/review/REVIEW_BUNDLE__TASK-009-public-setup-cleanup.md` for exact commands and
+  output. A real `git clone` verification of the public remote is a documented follow-up
+  for after this branch is merged and pushed — not done as part of this ticket.
+- `backend/.env.example` inspected and found accurate/safe already (Demo-mode-needs-no-key
+  comment, placeholder key text, safe defaults) — left unchanged, no mismatch found.
+- No Makefile/scripts/`docs/SETUP.md`/`frontend/README.md` added: the setup path is fully
+  covered by README.md in well under 15 commands once the above fixes landed: adding new
+  files would be maintenance surface for marginal benefit. Not ruled out permanently, just
+  not justified by this ticket's findings.
+- No backend/frontend behavior changes, no new dependencies, no changes to
+  `backend/requirements.txt` or `backend/.env.example`.
 
 ### Fixed in TASK-008A
 
