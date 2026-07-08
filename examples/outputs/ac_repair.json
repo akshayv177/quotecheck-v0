@@ -23,14 +23,14 @@
         "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
     ],
     "verification_questions": [
-        "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
-        "Which items are safety-critical vs optional preventive maintenance?",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "What diagnostic fault code or symptom led to the compressor/refrigerant recommendation?",
+        "Is the unit still under manufacturer or extended warranty?",
+        "What refrigerant type and quantity does the job require, and is that reflected in the price?"
     ],
     "things_to_verify": [
-        "Request an itemized parts + labour breakdown for each line item.",
-        "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "Get the unit's model/serial number and confirm its warranty status before approving.",
+        "Confirm a refrigerant leak was actually located, not just assumed from low pressure.",
+        "Ask whether a full system replacement was considered instead of a compressor repair, and why."
     ],
     "uncertainty_markers": {
         "ambiguous_items_present": true,
@@ -42,8 +42,8 @@
     "metadata": {
         "prompt_version": "quotecheck_v0.2",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-07-08T16:00:13.203049Z",
-        "request_id": "9f87e3b4-5445-470a-904c-5abd6bd41ec0",
+        "created_at": "2026-07-08T16:35:18.241099Z",
+        "request_id": "fd8f475a-0290-430e-92bb-113783b21603",
         "latency_ms": 0,
         "schema_valid": true
     }

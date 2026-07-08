@@ -22,14 +22,14 @@
         "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
     ],
     "verification_questions": [
-        "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
-        "Which items are safety-critical vs optional preventive maintenance?",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "Can you resend the quote with itemized parts, labour, and a reason for each recommendation?",
+        "What specific work is being proposed, and what problem is it meant to fix?",
+        "Is this work urgent, or can it wait until you get a second quote?"
     ],
     "things_to_verify": [
-        "Request an itemized parts + labour breakdown for each line item.",
-        "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "Ask for a fully itemized breakdown before evaluating this quote further.",
+        "Confirm what underlying problem or symptom prompted this quote.",
+        "Get the vendor's contact info and a written copy of the quote for your records."
     ],
     "uncertainty_markers": {
         "ambiguous_items_present": true,
@@ -41,8 +41,8 @@
     "metadata": {
         "prompt_version": "quotecheck_v0.2",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-07-08T16:00:13.370768Z",
-        "request_id": "eee7d0d7-fb48-4390-8756-f5100ac16a01",
+        "created_at": "2026-07-08T16:35:18.403715Z",
+        "request_id": "90bc02cf-9f08-41d4-b446-8641d48a8b78",
         "latency_ms": 0,
         "schema_valid": true
     }

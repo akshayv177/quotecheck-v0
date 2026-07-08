@@ -22,14 +22,14 @@
         "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
     ],
     "verification_questions": [
-        "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
-        "Which items are safety-critical vs optional preventive maintenance?",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "Can you itemize exactly what the misc/labour/service charge covers?",
+        "Is this a fixed fee or a time-based labour charge, and what's the hourly rate if applicable?",
+        "Does this charge overlap with cost already included in another line item on the quote?"
     ],
     "things_to_verify": [
-        "Request an itemized parts + labour breakdown for each line item.",
-        "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "Request a line-by-line breakdown of any bundled or generically named charges.",
+        "Confirm this charge isn't duplicating cost already included in another line item.",
+        "Ask whether this charge is negotiable or waivable if you decline related work."
     ],
     "uncertainty_markers": {
         "ambiguous_items_present": true,
@@ -41,8 +41,8 @@
     "metadata": {
         "prompt_version": "quotecheck_v0.2",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-07-08T16:00:13.312665Z",
-        "request_id": "0dbce57d-a369-42a8-a2f8-2ba833ce8674",
+        "created_at": "2026-07-08T16:35:18.352894Z",
+        "request_id": "a8564194-60dc-4bd4-828c-b2d522a23113",
         "latency_ms": 0,
         "schema_valid": true
     }

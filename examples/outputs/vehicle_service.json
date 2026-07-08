@@ -58,14 +58,20 @@
         "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
     ],
     "verification_questions": [
-        "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
-        "Which items are safety-critical vs optional preventive maintenance?",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "Can you share photos or measurements (pad thickness, tread depth) that support the brake/tyre recommendation?",
+        "Is this brake/tyre work needed immediately, or can it wait until after a second opinion?",
+        "Are the replacement parts OEM or aftermarket, and what warranty do they carry?",
+        "Can you itemize exactly what the misc/labour/service charge covers?",
+        "Is this a fixed fee or a time-based labour charge, and what's the hourly rate if applicable?",
+        "Does this charge overlap with cost already included in another line item on the quote?"
     ],
     "things_to_verify": [
-        "Request an itemized parts + labour breakdown for each line item.",
-        "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
-        "Confirm whether the recommendation is manufacturer-specified or vendor-suggested."
+        "Confirm current pad thickness and tread depth measurements before approving replacement.",
+        "Check whether the vehicle is still under a manufacturer or extended warranty that could cover this work.",
+        "Get a second opinion from an independent mechanic for safety-critical work before approving.",
+        "Request a line-by-line breakdown of any bundled or generically named charges.",
+        "Confirm this charge isn't duplicating cost already included in another line item.",
+        "Ask whether this charge is negotiable or waivable if you decline related work."
     ],
     "uncertainty_markers": {
         "ambiguous_items_present": true,
@@ -77,8 +83,8 @@
     "metadata": {
         "prompt_version": "quotecheck_v0.2",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-07-08T16:00:13.139773Z",
-        "request_id": "d81f1bae-2e14-4065-8645-58da013b060a",
+        "created_at": "2026-07-08T16:35:18.185074Z",
+        "request_id": "dd9b57ff-9dd5-4790-8d44-a223b0ee3075",
         "latency_ms": 0,
         "schema_valid": true
     }
