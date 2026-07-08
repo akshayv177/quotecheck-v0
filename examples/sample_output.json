@@ -1,0 +1,85 @@
+{
+    "line_items": [
+        {
+            "name_raw": "Brake service/ pads (from quote)",
+            "normalized_category": "safety_critical",
+            "explanation": "Brake pads are the friction material that presses on the rotor to slow the vehicle. A shop typically recommends replacement when pad thickness drops below a safe threshold or the rotor shows wear.",
+            "vague_or_confusing": false,
+            "recommended_action": "needs_inspection",
+            "risk_level": "red",
+            "confidence": 0.7,
+            "rationale_short": "Braking components are safety-critical. Ask for pad thickness and rotor condition evidence.",
+            "price": null,
+            "evidence_needed": [
+                "Pad thickness measurement (mm)",
+                "Rotor condition photo",
+                "Reason for replacement"
+            ]
+        },
+        {
+            "name_raw": "Tyre replacement (from quote)",
+            "normalized_category": "safety_critical",
+            "explanation": "Tyres are the vehicle's only contact with the road, so tread depth and condition affect braking, handling, and grip. A shop recommends replacement or rotation to keep wear even and maintain safe tread depth.",
+            "vague_or_confusing": false,
+            "recommended_action": "ask_for_evidence",
+            "risk_level": "yellow",
+            "confidence": 0.65,
+            "rationale_short": "Tyres affect braking and handling. Ask for tread depth and sidewall condition details.",
+            "price": {
+                "amount": 0.0,
+                "currency": "INR"
+            },
+            "evidence_needed": [
+                "Tread depth (mm)",
+                "Uneven wear explanation",
+                "Sidewall damage photo (if any)"
+            ]
+        },
+        {
+            "name_raw": "Other/unspecified charges (from quote)",
+            "normalized_category": "unknown_needs_clarification",
+            "explanation": "The quote mentions one or more generically named or un-itemized charges (e.g. misc, labour, service charge, gas top-up). This stub cannot know what they specifically cover without an itemized breakdown from the vendor.",
+            "vague_or_confusing": true,
+            "recommended_action": "ask_for_evidence",
+            "risk_level": "yellow",
+            "confidence": 0.4,
+            "rationale_short": "Generic or bundled charges are unclear without an itemized breakdown; ask the vendor to itemize them.",
+            "price": null,
+            "evidence_needed": [
+                "Itemized breakdown of what this charge covers",
+                "Confirm whether this is a fixed fee or time-based labour charge"
+            ]
+        }
+    ],
+    "overall_summary": [
+        "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
+        "Safety-critical items (like brakes/tyres) should be verified with evidence before approval.",
+        "Any generically named or bundled charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
+        "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
+    ],
+    "verification_questions": [
+        "Can you share photos/measurements that justify each recommended item?",
+        "Which items are safety-critical vs optional preventive maintenance?",
+        "Confirm whether the recommendation is OEM-specified or shop-suggested."
+    ],
+    "things_to_verify": [
+        "Request an itemized parts + labour breakdown for each line item.",
+        "Ask for measurements (pad thickness, tread depth) where applicable.",
+        "Confirm whether the recommendation is OEM-specified or shop-suggested."
+    ],
+    "uncertainty_markers": {
+        "ambiguous_items_present": true,
+        "missing_vehicle_context": true,
+        "needs_mechanic_confirmation": true
+    },
+    "refusals": [],
+    "disclaimer": "QuoteCheck is a v0 prototype; results may be incomplete or wrong. Not safety advice; verify with a certified mechanic. QuoteCheck explains quotes and suggests questions; it does not verify vendor claims, guarantee fair pricing, or perform price benchmarking.",
+    "metadata": {
+        "prompt_version": "quotecheck_v0.2",
+        "model": "quotecheck-demo-analyzer",
+        "created_at": "2026-07-08T10:52:45.362892Z",
+        "request_id": "c1a631de-43ce-48b4-8c55-f05affce456b",
+        "latency_ms": 0,
+        "schema_valid": true
+    }
+}

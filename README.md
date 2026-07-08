@@ -1,45 +1,51 @@
-# QuoteCheck v0 — Service Quote Review Assistant (OpenAI API + React)
+# QuoteCheck v0 — understand a confusing quote before you approve it
 
-QuoteCheck helps users understand messy vehicle service quotes by turning unstructured text into a **schema-valid JSON breakdown** with **risk flags (red/yellow/green)**, **confidence**, and **verification questions** to ask the service center.
+QuoteCheck turns a messy service, repair, parts, or vendor quote into plain-English
+explanations, red flags, vendor questions, and things to verify — before you approve it.
 
-> Disclaimer: **Not safety advice; verify with a certified mechanic.**
+> Disclaimer: **Not safety advice; verify with a certified professional.** This is a
+> **v0 prototype** — see [Limitations](#limitations) below.
 
-> **No OpenAI API key needed to try this.** QuoteCheck defaults to a deterministic
-> **Demo mode** (`QUOTECHECK_USE_OPENAI=0`) that returns a full, schema-valid
-> quote-understanding report with zero cost and zero credentials. Real OpenAI calls
-> are opt-in — see [Configuration (modes)](#configuration-modes) below.
+## What it is, who it helps, why it exists
+
+You get a quote from a mechanic, contractor, or vendor. The line items are vague
+("labour", "misc charges"), you don't know which ones are safety-critical vs.
+optional, and you don't know what to ask before you say yes. QuoteCheck is for
+that moment: paste the quote text in, and get back an **explanation-first** report —
+what each item is, why it might be recommended, what's risky or bundled/unclear, and
+concrete questions to send back to the vendor. It exists to help someone understand
+and question a quote, not to replace the professional who ultimately signs off on it.
+
+Today's scope is vehicle-service-flavored (brakes, tyres, generic charges) as the
+first working slice; `SPEC.md` describes the broader target (general service/repair/
+parts/vendor quotes).
 
 ---
 
-This repo is deliberately built like a deployable LLM product:
-- **Schema-first contract** (Pydantic) → predictable UI + measurable reliability
-- **Structured Outputs (OpenAI Responses API)** → JSON constrained by strict schema
-- **Observability (JSONL run logs)** → traceability per request (request_id, latency, schema_valid, risk_counts)
-- **Prompt/version discipline** → prompt changes are versioned “product changes”
-- **Config + `.env`** → clean local dev, secrets never committed
+## Try it in under a minute (no API key needed)
 
----
-
-## Demo (local)
-
-No `backend/.env` file and no OpenAI API key are required for these steps — if
-`backend/.env` doesn't exist, the app falls back to its built-in defaults, which is
-**Demo mode** (`QUOTECHECK_USE_OPENAI=0`).
+QuoteCheck's default mode is a deterministic, zero-cost **Demo mode**
+(`QUOTECHECK_USE_OPENAI=0`) — no `backend/.env` file and no OpenAI API key required.
+Real OpenAI calls are opt-in — see [Demo mode vs. OpenAI mode](#demo-mode-vs-openai-mode).
 
 ### Prereqs
-- Python 3.11 (conda recommended)
+
+- Python 3.10+ **in an activated environment** (conda recommended below — there is no
+  committed `environment.yml`/lockfile yet, only a pinned `backend/requirements.txt`;
+  see [Limitations](#limitations))
 - Node 18+ / npm
 - WSL2 Ubuntu 22 works great
 
 ### 1) Backend
-From repo root:
+
+From repo root, with your environment activated:
 
 ```bash
 conda create -n quotecheck python=3.11 -y
 conda activate quotecheck
 pip install -r backend/requirements.txt
 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
-````
+```
 
 Sanity check:
 
@@ -64,13 +70,50 @@ confirming no OpenAI call was made.
 
 ---
 
-## Configuration (modes)
+## What a report looks like
+
+Input ([`examples/sample_quote.txt`](examples/sample_quote.txt)):
+
+```
+Brake pads replacement recommended. Tyre rotation. Shop supplies / misc service charge included.
+```
+
+Excerpt of the real Demo-mode response (full file:
+[`examples/sample_output.json`](examples/sample_output.json) — `request_id`,
+`created_at`, and `latency_ms` will differ on your machine/run):
+
+```json
+{
+  "name_raw": "Brake service/ pads (from quote)",
+  "explanation": "Brake pads are the friction material that presses on the rotor to slow the vehicle. A shop typically recommends replacement when pad thickness drops below a safe threshold or the rotor shows wear.",
+  "risk_level": "red",
+  "recommended_action": "needs_inspection",
+  "vague_or_confusing": false,
+  "evidence_needed": ["Pad thickness measurement (mm)", "Rotor condition photo", "Reason for replacement"]
+}
+```
+
+The third line item ("Shop supplies / misc service charge") comes back with
+`"vague_or_confusing": true` — QuoteCheck flags generic/bundled charges instead of
+silently passing them through. Every response also includes `overall_summary`,
+`verification_questions` ("questions to ask the vendor"), `things_to_verify`, explicit
+`uncertainty_markers`, and a mandatory disclaimer.
+
+## Screenshot
+
+*(No screenshot committed yet.)* To add one: run the backend + frontend steps above,
+open the app, click **Analyze quote** on the pre-filled sample, and save a capture of
+the report view here.
+
+---
+
+## Demo mode vs. OpenAI mode
 
 Local settings and secrets live in an untracked `backend/.env` file. You do **not**
 need to create one to try Demo mode — it's the default. Create one only if you want
 to switch to OpenAI mode:
 
-1. Copy example:
+1. Copy the example:
 
 ```bash
 cp backend/.env.example backend/.env
@@ -82,14 +125,16 @@ Demo mode — deterministic stub analyzer, default, zero cost, no key required
 * `QUOTECHECK_USE_OPENAI=0`
 
 OpenAI mode — real model calls, requires a key
-* `QUOTECHECK_USE_OPENAI=1` 
-* `OPENAI_API_KEY=your_key_here` 
+* `QUOTECHECK_USE_OPENAI=1`
+* `OPENAI_API_KEY=your_key_here`
 * `QUOTECHECK_MODEL=gpt-4o-mini`
 
 The frontend badge and the `metadata.model` field in every `/analyze` response
 reflect whichever mode actually served the request (`quotecheck-demo-analyzer` in
 Demo mode, the configured `QUOTECHECK_MODEL` in OpenAI mode) — so it's never
-ambiguous which one produced a given report.
+ambiguous which one produced a given report. The committed
+[`examples/sample_output.json`](examples/sample_output.json) is a real Demo-mode
+response; no OpenAI call was made to produce it.
 
 > `backend/.env` is gitignored. Never commit secrets.
 
@@ -105,18 +150,20 @@ Request:
 { "quote_text": "Brake pads replacement recommended. Tyre rotation." }
 ```
 
-Response: **QuoteCheckResult** (schema-valid JSON):
+Response: **QuoteCheckResult** (schema-valid JSON) — see
+[`examples/sample_output.json`](examples/sample_output.json) for a full real example.
 
-* `line_items[]` with category, action, risk, confidence, short rationale
+* `line_items[]` — category, plain-English `explanation`, `vague_or_confusing` flag,
+  risk level, confidence, short rationale, evidence needed
 * `overall_summary[]`
-* `verification_questions[]`
+* `verification_questions[]` ("questions to ask the vendor")
 * `things_to_verify[]`
 * `uncertainty_markers`
 * `metadata` (request_id, prompt_version, model, latency_ms, schema_valid)
 
 ---
 
-## Architecture (v0)
+## Architecture
 
 ```
 Browser (React)
@@ -133,42 +180,71 @@ FastAPI Backend
 logs/app_runs.jsonl  (append-only traces)
 ```
 
-## Observability (JSONL)
-
-Every `/analyze` call appends one JSON line to:
-
-* `logs/app_runs.jsonl`
-
-Example fields:
-
-* `request_id`, `created_at`
-* `prompt_version`, `model`
-* `latency_ms`, `schema_valid`
-* `num_items`, `risk_counts`
-* `uncertainty`, `error`
-
-Inspect latest entry:
+Every `/analyze` call appends one JSON line to `logs/app_runs.jsonl` (request_id,
+prompt_version, model, latency_ms, schema_valid, risk_counts, uncertainty, error).
+Inspect the latest entry:
 
 ```bash
 tail -n 1 logs/app_runs.jsonl | python3 -m json.tool
 ```
 
+Prompt artifacts live in `backend/core/prompt.py`; `PROMPT_VERSION` is included in
+both API responses and run logs so prompt changes are traceable as versioned product
+changes.
+
 ---
 
-## Prompting & Versioning
+## What works today
 
-Prompt artifacts are centralized in:
+- Backend + frontend run locally; `/analyze` returns a schema-valid,
+  explanation-first result in both Demo mode (no API key) and OpenAI mode.
+- React UI renders a full quote-understanding report: explanation-first line-item
+  cards, risk badges, a "needs clarification" badge for vague/bundled charges,
+  evidence-needed lists, vendor questions, things to verify, a Demo/OpenAI mode
+  badge, staged progress + elapsed-time feedback while a request is in flight, a
+  client-side 55s timeout, and failure-specific error messages.
+- JSONL run logging + prompt version discipline.
+- Config via `.env` (untracked) with safe defaults; secrets never committed.
 
-* `backend/core/prompt.py`
+---
 
-`PROMPT_VERSION` is included in:
+## Limitations
 
-* API response metadata
-* run logs
+- No production-readiness claims: no auth, no database, no persistence beyond the
+  local JSONL log, no SLAs, no hardening.
+- Paste-text input only — no PDF/OCR/image ingestion.
+- Price benchmarking is **not implemented**; any price-related field is not a market
+  price check.
+- No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
+  Reproducibility today relies on activating a compatible Python 3.10+ environment
+  yourself (conda steps above); a fully pinned/reproducible environment file is a
+  future setup improvement, not something this repo guarantees yet.
+- No repair/retry when model output fails schema validation (planned).
+- No eval harness or automated test suite yet (`docs/CURRENT_STATE.md` has the full
+  gap list).
+- Current taxonomy/stub heuristics/prompt are vehicle-service-flavored, narrower than
+  the general service/repair/parts/vendor scope `SPEC.md` targets.
+- QuoteCheck does not verify vendor claims, guarantee fair pricing, or replace a
+  certified professional's judgment.
 
-Schema export utility:
+---
 
-* `backend/core/schema_export.py`
+## Why this is portfolio-credible
+
+This is a small v0, but it's built with the discipline of a real product, not a demo
+script:
+
+- **Schema-first contract** (Pydantic) so the UI and any future analyzer are bound to
+  the same validated shape, not to whatever a prompt happens to return.
+- **Honest metadata**: Demo-mode responses report `metadata.model =
+  "quotecheck-demo-analyzer"`, never an OpenAI model name — the UI badge and the
+  JSONL logs can't accidentally overstate what produced a result.
+- **Observability from day one**: every request is a traceable JSONL record
+  (request_id, prompt version, latency, schema validity, risk counts).
+- **Ticket + review-bundle workflow**: every change is scoped to a ticket
+  (`docs/tickets/`) with a review bundle recording exact commands and real output
+  (`docs/review/`) — see those directories for the project's full history.
+- **Honest limitations, stated plainly** rather than glossed over, per `SPEC.md`.
 
 ---
 
@@ -190,31 +266,20 @@ backend/
 frontend/
   src/App.jsx
 
+examples/
+  sample_quote.txt
+  sample_output.json
+
 logs/
   app_runs.jsonl
 
+docs/
+  tickets/    (one file per unit of work)
+  review/     (review bundle per ticket, with real command output)
+  CURRENT_STATE.md   (factual snapshot of what exists right now)
+
 eval/   (coming next)
-docs/   (coming next)
 ```
-
----
-
-## Current status (v0)
-
-- ✅ Backend + frontend run locally
-- ✅ `/analyze` returns schema-valid response (Demo mode, no API key needed)
-- ✅ React UI renders results table + cards + raw JSON, with a Demo/OpenAI mode badge
-- ✅ JSONL run logging + prompt version discipline
-- ✅ Config + dotenv workflow (secrets untracked)
-
----
-
-## Limitations (v0)
-
-* No authentication/users/DB
-* No PDF/OCR ingestion (paste text only)
-* Eval harness not wired yet
-* Repair retry on schema failures is not added yet (planned)
 
 ---
 
@@ -229,4 +294,4 @@ docs/   (coming next)
 
 ## License
 
-MIT 
+MIT

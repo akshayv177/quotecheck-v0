@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-006)
+Last updated: 2026-07-08 (TASK-007)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -116,6 +116,9 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 
 ## Gaps
 
+- No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
+  Reproducibility depends on the developer activating a compatible Python 3.10+
+  environment themselves (README documents a conda-based path).
 - No backend tests, no eval harness, no CI. `docs/` and `eval/` were empty until TASK-000.
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
@@ -127,6 +130,32 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-007
+
+- `README.md`: rewritten for a public/portfolio audience. Now opens with a "what /
+  who / why" product framing before any setup or architecture detail (previously led
+  with an engineering-tooling bullet list). Adds a "What a report looks like" section
+  with a real Demo-mode excerpt plus links to new `examples/` files, a "Screenshot"
+  placeholder section (no screenshot committed — no headless-browser tooling is
+  installed and adding one would be a new dependency, out of scope), and a "Why this
+  is portfolio-credible" section (schema-first contract, honest mode labeling, JSONL
+  observability, ticket/review-bundle discipline). Setup steps now explicitly state
+  the backend requires an activated Python environment and that no
+  `environment.yml`/lockfile is committed (only pinned `backend/requirements.txt`);
+  this reproducibility gap is also called out in the Limitations section. No setup
+  commands changed — same conda/pip/uvicorn/npm steps as before, just framed more
+  explicitly.
+- `examples/sample_quote.txt` (new): the frontend's existing built-in sample quote
+  text, copied verbatim so docs stay in sync with what a visitor sees in the app.
+- `examples/sample_output.json` (new): a real `POST /analyze` response captured by
+  running the backend in Demo mode (`QUOTECHECK_USE_OPENAI=0`, the default) against
+  `examples/sample_quote.txt`. Confirmed `metadata.model ==
+  "quotecheck-demo-analyzer"`. Not hand-written; `request_id`/`created_at`/
+  `latency_ms` will differ on a fresh run, noted in the README.
+- No backend/frontend behavior changes. No new dependencies. No
+  `docs/ARCHITECTURE.md` added (existing inline README diagram judged sufficient at
+  this size).
 
 ### Fixed in TASK-006
 
