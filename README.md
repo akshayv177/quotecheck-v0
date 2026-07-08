@@ -64,7 +64,8 @@ Sanity check (in another terminal, with the backend still running):
 curl http://localhost:8000/health
 ```
 
-Analyze a sample quote in Demo mode without opening the frontend:
+Analyze a sample quote in Demo mode without opening the frontend (run this from the
+repo root — it reads `examples/quote_ac_repair.txt` as a relative path):
 
 ```bash
 curl -s -X POST http://localhost:8000/analyze -H "Content-Type: application/json" \
@@ -123,9 +124,9 @@ contractor, a vague-charges parts quote, and a genuinely vague quote — are in
 
 ## Screenshot
 
-*(No screenshot committed yet.)* To add one: run the backend + frontend steps above,
-open the app, click **Analyze quote** on the pre-filled sample, and save a capture of
-the report view here.
+*(No screenshot committed yet — no placeholder or mocked-up image is used in its
+place.)* To add one, follow [`docs/LOCAL_DEMO.md`](docs/LOCAL_DEMO.md#8-screenshot-capture-location)
+and save a real capture of the report view at `docs/assets/quotecheck-demo-ui.png`.
 
 ---
 
@@ -249,6 +250,11 @@ changes.
 - QuoteCheck does not verify vendor claims, guarantee fair pricing, or replace a
   certified professional's judgment.
 
+For a full, neutral summary of what's public-ready vs. still limited, see
+[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md). To run it yourself and confirm
+it works end to end, see [`docs/LOCAL_DEMO.md`](docs/LOCAL_DEMO.md). For real
+captured sample reports, see [`examples/README.md`](examples/README.md).
+
 ---
 
 ## Why this is portfolio-credible
@@ -311,7 +317,10 @@ logs/
 docs/
   tickets/    (one file per unit of work)
   review/     (review bundle per ticket, with real command output)
-  CURRENT_STATE.md   (factual snapshot of what exists right now)
+  assets/     (real screenshots only — no placeholders; see LOCAL_DEMO.md)
+  CURRENT_STATE.md    (factual snapshot of what exists right now)
+  PROJECT_STATUS.md   (what's public-ready vs. still limited)
+  LOCAL_DEMO.md       (local run guide: start backend/frontend, verify it works)
 
 eval/   (coming next)
 ```

@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-009)
+Last updated: 2026-07-08 (TASK-010)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -140,6 +140,13 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   fallback), indexed in `examples/README.md`. Demo mode only, no OpenAI calls; not
   an automated eval harness (no pass/fail scoring, no CI) — see Roadmap item 2 in
   `README.md`.
+- Project-status/run docs (TASK-010): `docs/PROJECT_STATUS.md` (public-ready vs.
+  still-limited vs. not-to-overclaim summary) and `docs/LOCAL_DEMO.md` (neutral local
+  run guide: start backend/frontend, verify `/health` and `/analyze`, optional OpenAI
+  mode, screenshot capture location), both linked from README's Limitations section.
+  `docs/assets/` exists (currently only a `.gitkeep`) as the drop location for a
+  future real screenshot; no screenshot is committed and no placeholder image is
+  used.
 
 ## Gaps
 
@@ -161,6 +168,41 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-010
+
+- Added `docs/PROJECT_STATUS.md` (new): a neutral summary of what's public-ready
+  today, what's still limited, and what should not be overclaimed — written from
+  direct inspection, cross-linking `docs/CURRENT_STATE.md` for the full technical
+  baseline rather than duplicating it.
+- Added `docs/LOCAL_DEMO.md` (new): a neutral local run guide (start backend in Demo
+  mode, verify `/health`, run `/analyze` with an explicit repo-root reminder, start
+  frontend, test the UI, optional OpenAI mode, screenshot capture location). An
+  earlier draft of this ticket also added a presenter-style `docs/DEMO_CHECKLIST.md`
+  and a scripted `docs/DEMO_SCRIPT.md`; per user direction both were dropped —
+  `DEMO_SCRIPT.md` was deleted outright (presenter/audience framing doesn't belong in
+  a public repo) and `DEMO_CHECKLIST.md` was reframed and renamed to the neutral
+  `LOCAL_DEMO.md` above.
+- Renamed the public-readiness summary from `docs/PUBLIC_READINESS_REVIEW.md` to
+  `docs/PROJECT_STATUS.md` (content unchanged apart from the title/heading) — a more
+  normal name for a public-repo status doc.
+- Added `docs/assets/.gitkeep` (new): no real screenshot exists yet, so no image was
+  added — this only reserves the directory. No placeholder or mocked-up image was
+  created, per the no-fake-assets constraint.
+- `README.md`: added an explicit "run this from the repo root" note directly above
+  the `/analyze` curl example (it depends on a relative path,
+  `examples/quote_ac_repair.txt`); reworded the Screenshot section to state plainly
+  that no placeholder image is used and link to
+  `docs/LOCAL_DEMO.md#8-screenshot-capture-location`; added a paragraph in the
+  Limitations section linking to `docs/PROJECT_STATUS.md`, `docs/LOCAL_DEMO.md`, and
+  `examples/README.md`; added `docs/PROJECT_STATUS.md`, `docs/LOCAL_DEMO.md`, and
+  `docs/assets/` to the "Repo structure" tree. No other prose changes.
+- Scanned `README.md`, `docs/PROJECT_STATUS.md`, `docs/LOCAL_DEMO.md`, and
+  `docs/CURRENT_STATE.md` for private career/outreach context and for embedded
+  secrets — none found. See the review bundle for the exact grep commands and output.
+- No backend/frontend behavior changes, no new dependencies, no changes to
+  `examples/README.md` or `backend/.env.example` (both inspected, found already
+  accurate, left unchanged).
 
 ### Fixed in TASK-009
 
