@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-000)
+Last updated: 2026-07-08 (TASK-001)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -30,15 +30,17 @@ JSONL log record per request.
 
 ## Commands
 
-Backend (from repo root; Python 3.11; deps installed manually — see gaps):
+Backend (from repo root; deps pinned in `backend/requirements.txt`, verified against
+a clean venv on Python 3.10 and a conda env on Python 3.11):
 
 ```bash
-pip install fastapi uvicorn pydantic openai python-dotenv
+pip install -r backend/requirements.txt
 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 curl http://localhost:8000/health
 ```
 
-(The README additionally suggests a conda env; any Python 3.11 environment works.)
+(The README additionally suggests a conda env; any Python 3.10+ environment with
+`backend/requirements.txt` installed works.)
 
 Frontend:
 
@@ -71,8 +73,6 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
 
 ## Gaps
 
-- `backend/requirements.txt` does not exist, although the README install step
-  references it (`pip install -r backend/requirements.txt` fails).
 - No backend tests, no eval harness, no CI. `docs/` and `eval/` were empty until TASK-000.
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
@@ -80,11 +80,12 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
   than the SPEC.md target (general service / repair / parts / vendor quotes).
 - Price benchmarking does not exist.
 
-### Observed issues to verify/fix in future tickets (not reproduced at runtime)
+### Fixed in TASK-001
 
-- `backend/core/schema.py` (~line 158): `uncertainty_markers` default_factory passes a
-  misspelled kwarg `ambigious_items_present`; would likely fail validation if the
-  default ever fires. Both analyzers currently pass explicit values.
-- `backend/core/prompt.py` (`build_messages`): user content contains literal `\\n` /
-  `\\N` escape text instead of newlines.
-- `README.md` config example says `gpt-40-mini` (code default is `gpt-4o-mini`).
+- `backend/requirements.txt` now exists (pinned: fastapi, uvicorn, pydantic, openai,
+  python-dotenv); README install step works as written.
+- `backend/core/schema.py`: `uncertainty_markers` default_factory kwarg corrected from
+  `ambigious_items_present` to `ambiguous_items_present`.
+- `backend/core/prompt.py` (`build_messages`): user content now uses real newlines
+  instead of literal `\n` / `\N` escape text.
+- `README.md` config example corrected from `gpt-40-mini` to `gpt-4o-mini`.

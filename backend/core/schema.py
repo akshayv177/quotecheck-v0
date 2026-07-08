@@ -155,7 +155,7 @@ class QuoteCheckResult(BaseModel):
 
     uncertainty_markers: UncertaintyMarkers = Field(
         default_factory=lambda: UncertaintyMarkers(
-            ambigious_items_present=True,
+            ambiguous_items_present=True,
             missing_vehicle_context=True,
             needs_mechanic_confirmation=True,
         )
