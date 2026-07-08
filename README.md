@@ -257,22 +257,24 @@ captured sample reports, see [`examples/README.md`](examples/README.md).
 
 ---
 
-## Why this is portfolio-credible
+## Design notes
 
-This is a small v0, but it's built with the discipline of a real product, not a demo
-script:
+A few deliberate choices in this v0:
 
-- **Schema-first contract** (Pydantic) so the UI and any future analyzer are bound to
-  the same validated shape, not to whatever a prompt happens to return.
-- **Honest metadata**: Demo-mode responses report `metadata.model =
-  "quotecheck-demo-analyzer"`, never an OpenAI model name — the UI badge and the
-  JSONL logs can't accidentally overstate what produced a result.
-- **Observability from day one**: every request is a traceable JSONL record
-  (request_id, prompt version, latency, schema validity, risk counts).
-- **Ticket + review-bundle workflow**: every change is scoped to a ticket
-  (`docs/tickets/`) with a review bundle recording exact commands and real output
-  (`docs/review/`) — see those directories for the project's full history.
-- **Honest limitations, stated plainly** rather than glossed over, per `SPEC.md`.
+- **Schema-first API responses** (Pydantic) — the UI and any future analyzer are
+  bound to the same validated shape, not to whatever a prompt happens to return.
+- **Deterministic demo mode** — `metadata.model = "quotecheck-demo-analyzer"` in
+  Demo mode, never an OpenAI model name, so the UI badge and JSONL logs can't
+  accidentally overstate what produced a result.
+- **Optional OpenAI mode** — opt-in, requires `backend/.env` with
+  `OPENAI_API_KEY`; see [Demo mode vs. OpenAI mode](#demo-mode-vs-openai-mode).
+- **Reviewable report sections** — explanation, risk, vendor questions, and
+  things to verify are separate, structured fields, not a single free-text blob.
+- **JSONL request logs** — every request is a traceable record (request_id,
+  prompt version, latency, schema validity, risk counts) in
+  `logs/app_runs.jsonl`.
+- **Honest limitations, stated plainly** rather than glossed over, per `SPEC.md`
+  and [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
 
 ---
 
