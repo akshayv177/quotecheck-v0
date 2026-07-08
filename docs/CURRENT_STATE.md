@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-003)
+Last updated: 2026-07-08 (TASK-004)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -28,12 +28,18 @@ JSONL log record per request.
 - `backend/core/run_logger.py` / `logs/app_runs.jsonl` — append-only JSONL run logs.
 - `backend/core/schema_export.py` — JSON Schema export used by the OpenAI analyzer.
 - `frontend/src/App.jsx` — entire UI: textarea → Analyze → quote-understanding
-  report (summary card, then one card per line item with `explanation` as the
-  prominent field, `rationale_short` as secondary risk reasoning, a risk pill,
-  a "NEEDS CLARIFICATION" badge when `vague_or_confusing` is true, and
-  `evidence_needed` as a secondary bullet list), "Questions to ask the vendor" /
-  "Things to verify before approving" / metadata cards, raw JSON view. React 19 +
-  Vite 7.
+  report (report header with a derived risk-count strip, summary card, then one
+  card per line item with `explanation` as the prominent field, `rationale_short`
+  as secondary risk reasoning, a risk-colored left border, a risk pill using
+  semantic wording ("High risk" / "Caution" / "Low risk"), a "Needs
+  clarification" badge when `vague_or_confusing` is true, and `evidence_needed`
+  as a secondary bullet list), a "Before you approve" section ("Questions to
+  ask the vendor" / "Things to verify before approving", responsive 2→1 column),
+  a footer with the disclaimer always visible, run metadata, and raw JSON
+  collapsed by default in a `<details>` block with the Copy button inside it. A
+  real loading state (pulse indicator) and a styled error card replace the
+  earlier button-label-only loading and bare-crimson error text. Single light
+  theme (`frontend/src/index.css` token set); no dark mode. React 19 + Vite 7.
 
 ## Commands
 
@@ -103,6 +109,32 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-004
+
+- `frontend/src/index.css`: replaced the stock Vite template theme (dark
+  `#242424` default under `prefers-color-scheme: dark`, `body` flex-centering,
+  `3.2em` h1) with a single light-only design-token set (`--bg`, `--surface`,
+  ink/border/accent, per-risk color triples, vague/error colors) plus small
+  helpers (`.two-col-grid` responsive collapse, `.status-pulse` loading
+  animation). `frontend/src/App.css` (dead, unimported since before TASK-003)
+  deleted.
+- `frontend/src/App.jsx`: visual restyle only — no data-flow change. Header now
+  reads "QuoteCheck" with a "v0 prototype" chip; input is a card with helper
+  text; a real loading indicator (pulse bar + status text) supplements the
+  button label; a styled error card replaces bare `crimson` error text; the
+  report gained a derived risk-count strip (computed client-side from existing
+  `line_items`, e.g. "3 items · 1 high risk · 1 caution · 1 needs
+  clarification"); line-item cards gained a risk-colored left border and
+  semantic risk-badge wording ("High risk" / "Caution" / "Low risk" instead of
+  "RED"/"YELLOW"/"GREEN"); the two checklist cards are now grouped under a
+  "Before you approve" heading with a responsive 2→1 column collapse; raw JSON
+  moved into a collapsed-by-default `<details>` block (Copy JSON button inside
+  it) while the disclaimer stays visible without expanding anything.
+  `frontend/index.html` title changed from the default "frontend" to a real
+  page title. `/analyze` request/response shape, `Pill`/`Card`/`RiskPill`/
+  `VagueBadge`/`LineItemCard` props, and the prefilled sample quote are all
+  unchanged. No backend files touched; no new dependencies.
 
 ### Fixed in TASK-003
 

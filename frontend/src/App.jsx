@@ -10,6 +10,9 @@
  * primary human-readable field per line item; `rationale_short` is secondary
  * risk reasoning; `vague_or_confusing` surfaces as a "NEEDS CLARIFICATION"
  * badge alongside the risk pill.
+ *
+ * TASK-004: visual polish pass. Styling only — same data flow, same
+ * `/analyze` payload, same fields rendered.
  */
 
 import { useMemo, useState } from "react";
@@ -25,8 +28,18 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-
   const prettyJson = useMemo(() => (result ? JSON.stringify(result, null, 2) : ""), [result]);
+
+  const riskCounts = useMemo(() => {
+    const items = result?.line_items || [];
+    const counts = { red: 0, yellow: 0, green: 0, vague: 0 };
+    for (const it of items) {
+      const l = String(it.risk_level || "").toLowerCase();
+      if (counts[l] !== undefined) counts[l] += 1;
+      if (it.vague_or_confusing) counts.vague += 1;
+    }
+    return { total: items.length, ...counts };
+  }, [result]);
 
   async function analyzeQuote() {
     setLoading(true); setErr(null);
@@ -51,106 +64,200 @@ export default function App() {
   }
 
   async function copyJson() {
-  if (!prettyJson) return;
-  await navigator.clipboard.writeText(prettyJson);
-  setCopied(true);
-  setTimeout(() => setCopied(false), 1200);
-}
+    if (!prettyJson) return;
+    await navigator.clipboard.writeText(prettyJson);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
 
   return (
-    <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 1000, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 6 }}>QuoteCheck v0</h1>
-      <div style={{ opacity: 0.8, marginBottom: 16 }}>
-        Paste a service quote → understand each item first, then verify what's vague, risky, or confusing.
-      </div>
+    <div style={{ padding: "32px 24px", maxWidth: 860, margin: "0 auto" }}>
+      <header style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <h1 style={{ margin: 0, fontWeight: 700, color: "var(--ink)" }}>QuoteCheck</h1>
+          <span style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            padding: "2px 8px",
+            borderRadius: 999,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            color: "var(--ink-3)"
+          }}>
+            v0 prototype
+          </span>
+        </div>
+        <div style={{ color: "var(--ink-2)", fontSize: 15, lineHeight: 1.5 }}>
+          Paste a service or repair quote. QuoteCheck explains every line item, flags
+          what's vague or risky, and gives you questions to send back — before you approve.
+        </div>
+      </header>
 
-      <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
-        Quote text
-      </label>
-      <textarea
-        value={quoteText}
-        onChange={(e) => setQuoteText(e.target.value)}
-        rows={8}
-        style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid #ddd" }}
-        placeholder="Paste quote text here..."
-      />
+      <div style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        padding: 20,
+        boxShadow: "0 1px 2px rgba(0,0,0,.05)"
+      }}>
+        <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "var(--ink)" }}>
+          Your quote
+        </label>
+        <textarea
+          value={quoteText}
+          onChange={(e) => setQuoteText(e.target.value)}
+          rows={8}
+          style={{
+            width: "100%",
+            padding: 12,
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            fontFamily: "inherit",
+            fontSize: 14,
+            color: "var(--ink)",
+            boxSizing: "border-box"
+          }}
+          placeholder="Paste the quote text exactly as you received it…"
+        />
+        <div style={{ marginTop: 6, fontSize: 12, color: "var(--ink-3)" }}>
+          Works with service, repair, and parts quotes. Text only for now.
+        </div>
 
-      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
-        <button
-          onClick={analyzeQuote}
-          disabled={loading || quoteText.trim().length === 0}
-          style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ddd", cursor: "pointer" }}
-        >
-          {loading ? "Analyzing..." : "Analyze"}
-        </button>
+        <div style={{ marginTop: 14 }}>
+          <button
+            onClick={analyzeQuote}
+            disabled={loading || quoteText.trim().length === 0}
+            style={{
+              padding: "10px 18px",
+              borderRadius: 10,
+              border: "1px solid var(--accent)",
+              background: "var(--accent)",
+              color: "#fff",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            {loading ? "Analyzing…" : "Analyze quote"}
+          </button>
+        </div>
 
-        <button
-          onClick={copyJson}
-          disabled={!result}
-          style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ddd", cursor: "pointer" }}
-        >
-          {copied ? "Copied!" : "Copy result as JSON"}
-        </button>
+        {loading && (
+          <div style={{ marginTop: 14 }}>
+            <div className="status-pulse" />
+            <div style={{ marginTop: 6, fontSize: 13, color: "var(--ink-3)" }}>
+              Analyzing your quote…
+            </div>
+          </div>
+        )}
       </div>
 
       {err && (
-        <div style={{ marginTop: 16, color: "crimson" }}>
-          Error: {err}
+        <div style={{
+          marginTop: 16,
+          background: "var(--error-bg)",
+          color: "var(--error-fg)",
+          border: "1px solid var(--error-border)",
+          borderLeft: "3px solid var(--error-border)",
+          borderRadius: 10,
+          padding: "12px 16px",
+          fontSize: 14
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Couldn't analyze this quote.</div>
+          <div style={{ opacity: 0.9 }}>{err}</div>
+          <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
+            Check that the backend is running on port 8000.
+          </div>
         </div>
       )}
 
       {result && (
-        <div style={{ marginTop: 24 }}>
+        <div style={{ marginTop: 32 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+            <h2 style={{ margin: 0, fontSize: 18, color: "var(--ink)" }}>Report</h2>
+            <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+              {riskCounts.total} item{riskCounts.total === 1 ? "" : "s"}
+              {riskCounts.red > 0 && <> · <span style={{ color: "var(--risk-red-fg)", fontWeight: 600 }}>{riskCounts.red} high risk</span></>}
+              {riskCounts.yellow > 0 && <> · <span style={{ color: "var(--risk-yellow-fg)", fontWeight: 600 }}>{riskCounts.yellow} caution</span></>}
+              {riskCounts.vague > 0 && <> · <span style={{ color: "var(--vague-fg)", fontWeight: 600 }}>{riskCounts.vague} needs clarification</span></>}
+            </div>
+          </div>
+
           <Card title="Summary">
-            <ul style={{ marginTop: 8 }}>
-              {(result.overall_summary || []).map((s, i) => <li key={i}>{s}</li>)}
+            <ul style={{ marginTop: 8, paddingLeft: 20, color: "var(--ink)" }}>
+              {(result.overall_summary || []).map((s, i) => <li key={i} style={{ marginBottom: 4 }}>{s}</li>)}
             </ul>
           </Card>
 
-          <h2 style={{ marginTop: 22, marginBottom: 8 }}>Line items</h2>
+          <h3 style={{ marginTop: 28, marginBottom: 12, fontSize: 15, color: "var(--ink)" }}>
+            Line items, explained
+          </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {(result.line_items || []).map((it, idx) => (
               <LineItemCard key={idx} item={it} />
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 18 }}>
+          <h3 style={{ marginTop: 28, marginBottom: 12, fontSize: 15, color: "var(--ink)" }}>
+            Before you approve
+          </h3>
+          <div className="two-col-grid">
             <Card title="Questions to ask the vendor">
-              <ul style={{ marginTop: 8 }}>
-                {(result.verification_questions || []).map((q, i) => <li key={i}>{q}</li>)}
+              <ul style={{ marginTop: 8, paddingLeft: 20, color: "var(--ink)" }}>
+                {(result.verification_questions || []).map((q, i) => <li key={i} style={{ marginBottom: 4 }}>{q}</li>)}
               </ul>
             </Card>
 
             <Card title="Things to verify before approving">
-              <ul style={{ marginTop: 8 }}>
-                {(result.things_to_verify || []).map((t, i) => <li key={i}>{t}</li>)}
+              <ul style={{ marginTop: 8, paddingLeft: 20, color: "var(--ink)" }}>
+                {(result.things_to_verify || []).map((t, i) => <li key={i} style={{ marginBottom: 4 }}>{t}</li>)}
               </ul>
-            </Card>
-
-            <Card title="Run metadata">
-              <div style={{ marginTop: 8, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13 }}>
-                <div>request_id: {result.metadata?.request_id}</div>
-                <div>prompt_version: {result.metadata?.prompt_version}</div>
-                <div>model: {result.metadata?.model}</div>
-                <div>latency_ms: {result.metadata?.latency_ms}</div>
-              </div>
-              <div style={{ marginTop: 10, opacity: 0.8, fontSize: 13 }}>
-                {result.disclaimer}
-              </div>
             </Card>
           </div>
 
-          <h2 style={{ marginTop: 22, marginBottom: 8 }}>Raw JSON</h2>
-          <pre style={{
-            background: "#111827",
-            color: "#e5e7eb",
-            padding: 12,
-            borderRadius: 12,
-            overflowX: "auto",
-            fontSize: 13
+          <div style={{
+            marginTop: 28,
+            paddingTop: 16,
+            borderTop: "1px solid var(--border)"
           }}>
-            {prettyJson}
-          </pre>
+            <div style={{ fontSize: 13, color: "var(--ink-2)", fontStyle: "italic" }}>
+              {result.disclaimer}
+            </div>
+
+            <div style={{
+              marginTop: 10,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: 12,
+              color: "var(--ink-3)"
+            }}>
+              request_id: {result.metadata?.request_id} · prompt_version: {result.metadata?.prompt_version}
+              {" "}· model: {result.metadata?.model} · latency_ms: {result.metadata?.latency_ms}
+            </div>
+
+            <details style={{ marginTop: 14 }}>
+              <summary>Developer: raw JSON</summary>
+              <div style={{ marginTop: 10 }}>
+                <button
+                  onClick={copyJson}
+                  disabled={!result}
+                  style={{ padding: "6px 12px", fontSize: 13, borderRadius: 8 }}
+                >
+                  {copied ? "Copied!" : "Copy JSON"}
+                </button>
+                <pre style={{
+                  marginTop: 10,
+                  background: "#111827",
+                  color: "#e5e7eb",
+                  padding: 12,
+                  borderRadius: 10,
+                  overflowX: "auto",
+                  fontSize: 12
+                }}>
+                  {prettyJson}
+                </pre>
+              </div>
+            </details>
+          </div>
         </div>
       )}
     </div>
@@ -159,11 +266,19 @@ export default function App() {
 
 function LineItemCard({ item }) {
   const evidence = item.evidence_needed || [];
+  const riskColors = getRiskColors(item.risk_level);
 
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 16 }}>
+    <div style={{
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
+      borderLeft: `3px solid ${riskColors.border}`,
+      borderRadius: 12,
+      padding: 16,
+      boxShadow: "0 1px 2px rgba(0,0,0,.05)"
+    }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>{item.name_raw}</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>{item.name_raw}</div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           <RiskPill level={item.risk_level} />
           {item.vague_or_confusing && <VagueBadge />}
@@ -171,30 +286,30 @@ function LineItemCard({ item }) {
       </div>
 
       {item.explanation && (
-        <div style={{ marginTop: 10, fontSize: 15, lineHeight: 1.5 }}>
+        <div style={{ marginTop: 10, fontSize: 15, lineHeight: 1.6, color: "var(--ink)" }}>
           {item.explanation}
         </div>
       )}
 
       {item.rationale_short && (
-        <div style={{ marginTop: 8, fontSize: 13, opacity: 0.75 }}>
-          <span style={{ fontWeight: 600 }}>Risk reasoning: </span>
+        <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink-2)" }}>
+          <span style={{ fontWeight: 600 }}>Why this risk level: </span>
           {item.rationale_short}
         </div>
       )}
 
-      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-        Category: {item.normalized_category} · Action: {item.recommended_action} · Confidence: {typeof item.confidence === "number" ? item.confidence.toFixed(2) : item.confidence}
-      </div>
-
       {evidence.length > 0 && (
-        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
-          <div style={{ fontWeight: 600 }}>Evidence to ask for:</div>
+        <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink-2)" }}>
+          <div style={{ fontWeight: 600 }}>Ask the vendor for evidence:</div>
           <ul style={{ margin: "4px 0 0 0", paddingLeft: 18 }}>
             {evidence.map((e, i) => <li key={i}>{e}</li>)}
           </ul>
         </div>
       )}
+
+      <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-3)" }}>
+        Category: {item.normalized_category} · Action: {item.recommended_action} · Confidence: {typeof item.confidence === "number" ? item.confidence.toFixed(2) : item.confidence}
+      </div>
     </div>
   );
 }
@@ -205,9 +320,10 @@ function Pill({ bg, border, fg, label }) {
       display: "inline-block",
       padding: "2px 10px",
       borderRadius: 999,
-      fontSize: 12,
-      fontWeight: 700,
-      letterSpacing: 0.4,
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: 0.3,
+      textTransform: "uppercase",
       background: bg,
       color: fg,
       border: `1px solid ${border}`
@@ -217,26 +333,35 @@ function Pill({ bg, border, fg, label }) {
   );
 }
 
-function RiskPill({ level }) {
+function getRiskColors(level) {
   const l = String(level || "").toLowerCase();
   const map = {
-    red:   { bg: "#7f1d1d", border: "#ef4444", fg: "#fee2e2", label: "RED" },
-    yellow:{ bg: "#78350f", border: "#f59e0b", fg: "#fffbeb", label: "YELLOW" },
-    green: { bg: "#064e3b", border: "#10b981", fg: "#d1fae5", label: "GREEN" }
+    red: { bg: "var(--risk-red-bg)", border: "var(--risk-red-border)", fg: "var(--risk-red-fg)", label: "High risk" },
+    yellow: { bg: "var(--risk-yellow-bg)", border: "var(--risk-yellow-border)", fg: "var(--risk-yellow-fg)", label: "Caution" },
+    green: { bg: "var(--risk-green-bg)", border: "var(--risk-green-border)", fg: "var(--risk-green-fg)", label: "Low risk" }
   };
-  const c = map[l] || { bg: "#111827", border: "#374151", fg: "#e5e7eb", label: (l || "UNKNOWN").toUpperCase() };
+  return map[l] || { bg: "var(--surface)", border: "var(--border)", fg: "var(--ink-3)", label: (l || "unknown").toUpperCase() };
+}
 
+function RiskPill({ level }) {
+  const c = getRiskColors(level);
   return <Pill bg={c.bg} border={c.border} fg={c.fg} label={c.label} />;
 }
 
 function VagueBadge() {
-  return <Pill bg="#4c1d95" border="#a78bfa" fg="#ede9fe" label="NEEDS CLARIFICATION" />;
+  return <Pill bg="var(--vague-bg)" border="var(--vague-border)" fg="var(--vague-fg)" label="Needs clarification" />;
 }
 
 function Card({ title, children }) {
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 14 }}>
-      <div style={{ fontWeight: 700 }}>{title}</div>
+    <div style={{
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
+      borderRadius: 12,
+      padding: 16,
+      boxShadow: "0 1px 2px rgba(0,0,0,.05)"
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: "var(--ink)" }}>{title}</div>
       {children}
     </div>
   );
