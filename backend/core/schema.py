@@ -79,17 +79,42 @@ class LineItem(BaseModel):
 
     name_raw: original text as present in the quote.
     normalized_category: v0 taxonomy category.
+    explanation: plain-English understanding of what the item is and why a vendor
+        might recommend it (quote-understanding, not risk judgment).
+    vague_or_confusing: explicit flag for unclear/bundled/generic charges.
     recommended_action: what the user should do next.
     risk_level: green/yellow/red
     confidence: 0..1 subjective confidence in the classification
-    rationale_short: short explanation (1-2 sentences)
+    rationale_short: short risk-flag rationale (1-2 sentences)
     """
     name_raw: str = Field(..., min_length=1)
     normalized_category: NormalizedCategory
+    explanation: str = Field(
+        default="",
+        description=(
+            "Plain-English explanation of what this line item is and why a vendor "
+            "might recommend it, written for a non-expert. Distinct from "
+            "rationale_short, which is the risk-flag rationale. The default empty "
+            "string exists only for Python-side backward compatibility; analyzers "
+            "must always populate this with a non-empty explanation."
+        ),
+    )
+    vague_or_confusing: bool = Field(
+        default=False,
+        description=(
+            "True when this charge is unclear, vague, bundled, or hard for a normal "
+            "customer to understand (e.g. generic naming, no breakdown), "
+            "independent of normalized_category."
+        ),
+    )
     recommended_action: RecommendedAction
     risk_level: RiskLevel
     confidence: float = Field(..., ge=0.0, le=1.0)
-    rationale_short: str = Field(..., min_length=1)
+    rationale_short: str = Field(
+        ...,
+        min_length=1,
+        description="Short risk-flag rationale (1-2 sentences), not the plain-English explanation (see `explanation`).",
+    )
 
     price: Optional[Price] = None
     evidence_needed: List[str] = Field(default_factory=list, description="What evidence to ask for (photos, measurements, codes).")
@@ -150,8 +175,17 @@ class QuoteCheckResult(BaseModel):
     """
     line_items: List[LineItem] = Field(..., min_length=1)
     overall_summary: List[str] = Field(..., min_length=3, max_length=5)
-    verification_questions: List[str] = Field(..., min_length=3, max_length=8)
-    things_to_verify: List[str] = Field(..., min_length=3)
+    verification_questions: List[str] = Field(
+        ...,
+        min_length=3,
+        max_length=8,
+        description="Concrete, vendor-facing questions the user can send back to the vendor before approving.",
+    )
+    things_to_verify: List[str] = Field(
+        ...,
+        min_length=3,
+        description="Missing information / gaps the quote does not state that the user needs before approving.",
+    )
 
     uncertainty_markers: UncertaintyMarkers = Field(
         default_factory=lambda: UncertaintyMarkers(
