@@ -13,11 +13,45 @@
  *
  * TASK-004: visual polish pass. Styling only — same data flow, same
  * `/analyze` payload, same fields rendered.
+ *
+ * TASK-005: perceived-latency and progress states. Adds a client-side
+ * simulated stage sequence (derived from elapsed time, not a real backend
+ * progress signal — the backend is a single blocking call with no streaming),
+ * an elapsed-time readout, a client-side request timeout via AbortController,
+ * and error copy differentiated by failure kind. No `/analyze` payload or
+ * response-shape change.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const API_BASE = "http://localhost:8000";
+
+const REQUEST_TIMEOUT_MS = 55_000; // ~2.75x the ~20s typical real-LLM-mode latency
+
+const STAGES = [
+  { label: "Reading the quote…", minMs: 0 },
+  { label: "Identifying line items…", minMs: 3000 },
+  { label: "Checking for vague or risky charges…", minMs: 8000 },
+  { label: "Preparing your report…", minMs: 15000 },
+];
+const SLOW_HINT_MS = 20000;
+
+function stageForElapsed(ms) {
+  let idx = 0;
+  for (let i = 0; i < STAGES.length; i++) if (ms >= STAGES[i].minMs) idx = i;
+  return idx;
+}
+
+function formatElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  return s < 60 ? `${s}s elapsed` : `${Math.floor(s / 60)}m ${s % 60}s elapsed`;
+}
+
+const NETWORK_ERROR_MESSAGE =
+  "Couldn't reach the QuoteCheck backend. Make sure it's running at http://localhost:8000, then try again.";
+const TIMEOUT_ERROR_MESSAGE =
+  "This is taking longer than expected (over 55 seconds), so QuoteCheck gave up waiting. " +
+  "If you're running in AI mode the model call may be slow or stuck — try again, or check the backend terminal for errors.";
 
 export default function App() {
   const [quoteText, setQuoteText] = useState(
@@ -27,6 +61,17 @@ export default function App() {
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const startedAtRef = useRef(null);
+  const abortRef = useRef(null);
+
+  useEffect(() => {
+    if (!loading) return;
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 250);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const prettyJson = useMemo(() => (result ? JSON.stringify(result, null, 2) : ""), [result]);
 
@@ -42,24 +87,40 @@ export default function App() {
   }, [result]);
 
   async function analyzeQuote() {
-    setLoading(true); setErr(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    startedAtRef.current = Date.now();
+    setElapsedMs(0);
+    setLoading(true);
+    setErr(null);
+
     try {
       const r = await fetch(`${API_BASE}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quote_text: quoteText }) // backend expects quote_text
+        body: JSON.stringify({ quote_text: quoteText }), // backend expects quote_text
+        signal: controller.signal
       });
       if (!r.ok) {
         const text = await r.text();
-        throw new Error(`HTTP ${r.status}: ${text}`);
+        const httpErr = new Error(`HTTP ${r.status}: ${text}`);
+        httpErr.kind = "http";
+        throw httpErr;
       }
       const data = await r.json();
       setResult(data);
     } catch (e) {
-      setErr(String(e?.message || e));
+      if (e.name === "AbortError") setErr({ kind: "timeout", message: TIMEOUT_ERROR_MESSAGE });
+      else if (e instanceof TypeError) setErr({ kind: "network", message: NETWORK_ERROR_MESSAGE });
+      else if (e.kind === "http") setErr({ kind: "http", message: e.message });
+      else setErr({ kind: "other", message: String(e?.message || e) });
       setResult(null);
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
+      abortRef.current = null;
     }
   }
 
@@ -128,6 +189,7 @@ export default function App() {
           <button
             onClick={analyzeQuote}
             disabled={loading || quoteText.trim().length === 0}
+            aria-busy={loading}
             style={{
               padding: "10px 18px",
               borderRadius: 10,
@@ -145,9 +207,26 @@ export default function App() {
         {loading && (
           <div style={{ marginTop: 14 }}>
             <div className="status-pulse" />
-            <div style={{ marginTop: 6, fontSize: 13, color: "var(--ink-3)" }}>
-              Analyzing your quote…
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                marginTop: 6,
+                fontSize: 13,
+                color: "var(--ink-3)",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12
+              }}
+            >
+              <span>{STAGES[stageForElapsed(elapsedMs)].label}</span>
+              <span>{formatElapsed(elapsedMs)}</span>
             </div>
+            {elapsedMs > SLOW_HINT_MS && (
+              <div style={{ marginTop: 4, fontSize: 12, color: "var(--ink-3)" }}>
+                Still working — complex quotes can take a little longer.
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -164,10 +243,12 @@ export default function App() {
           fontSize: 14
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Couldn't analyze this quote.</div>
-          <div style={{ opacity: 0.9 }}>{err}</div>
-          <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
-            Check that the backend is running on port 8000.
-          </div>
+          <div style={{ opacity: 0.9 }}>{err.message}</div>
+          {(err.kind === "http" || err.kind === "other") && (
+            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
+              Check that the backend is running on port 8000.
+            </div>
+          )}
         </div>
       )}
 

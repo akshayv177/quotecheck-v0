@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-004)
+Last updated: 2026-07-08 (TASK-005)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -37,9 +37,13 @@ JSONL log record per request.
   ask the vendor" / "Things to verify before approving", responsive 2→1 column),
   a footer with the disclaimer always visible, run metadata, and raw JSON
   collapsed by default in a `<details>` block with the Copy button inside it. A
-  real loading state (pulse indicator) and a styled error card replace the
-  earlier button-label-only loading and bare-crimson error text. Single light
-  theme (`frontend/src/index.css` token set); no dark mode. React 19 + Vite 7.
+  real loading state (pulse indicator plus an elapsed-time-driven stage
+  label and elapsed-time counter, `aria-live="polite"`) and a styled error
+  card (copy differentiated by timeout/network/HTTP/other failure kind)
+  replace the earlier button-label-only loading and single generic error
+  message. Requests time out client-side after 55s via `AbortController`.
+  Single light theme (`frontend/src/index.css` token set); no dark mode.
+  React 19 + Vite 7.
 
 ## Commands
 
@@ -109,6 +113,26 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-005
+
+- `frontend/src/App.jsx`: the ~20s real-LLM-mode wait now has staged, honest
+  feedback instead of a static "Analyzing your quote…" line. A stage label
+  ("Reading the quote…" → "Identifying line items…" → "Checking for vague or
+  risky charges…" → "Preparing your report…") advances based on elapsed time
+  (client-side simulation — the backend makes a single blocking LLM call with
+  no real progress signal, so this is explicitly not claimed as true backend
+  progress) alongside a live elapsed-time counter; both are inside an
+  `aria-live="polite"` status region. Past ~20s a "still working" hint appears
+  instead of a fake final stage. Requests now abort client-side via
+  `AbortController` after 55s with a dedicated timeout message; `err` state
+  changed from a plain string to `{ kind, message }` so network-unreachable,
+  timeout, non-2xx HTTP, and other errors each get distinct copy (the "check
+  the backend is running on port 8000" hint now only shows for HTTP/other
+  errors, not for the already-self-contained network/timeout messages). No
+  backend changes, no new dependencies, `/analyze` request/response shape
+  unchanged, sample quote and full report rendering (including raw JSON/Copy)
+  unchanged.
 
 ### Fixed in TASK-004
 
