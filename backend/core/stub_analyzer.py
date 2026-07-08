@@ -69,6 +69,84 @@ def _verifying_professional(*, vehicle_matched: bool, ac_matched: bool, home_mat
     return "qualified professional"
 
 
+def _domain_questions_and_verification(
+    *, vehicle_matched: bool, ac_matched: bool, home_matched: bool, generic_charge_matched: bool
+) -> tuple[list[str], list[str]]:
+    """
+    Build domain-aware `verification_questions` (vendor-facing questions) and
+    `things_to_verify` (user-facing checklist) from which quote-type keyword blocks
+    matched. Deterministic: no LLM/web calls, just static text keyed off the same
+    booleans used to build line items above. Domains combine (e.g. a vehicle quote
+    that also has a generic bundled charge gets both chunks); when nothing
+    domain-specific matched, both lists fall back to plain clarifying questions
+    rather than pretending to know quote-specific details.
+    """
+    questions: list[str] = []
+    verify: list[str] = []
+
+    if vehicle_matched:
+        questions += [
+            "Can you share photos or measurements (pad thickness, tread depth) that support the brake/tyre recommendation?",
+            "Is this brake/tyre work needed immediately, or can it wait until after a second opinion?",
+            "Are the replacement parts OEM or aftermarket, and what warranty do they carry?",
+        ]
+        verify += [
+            "Confirm current pad thickness and tread depth measurements before approving replacement.",
+            "Check whether the vehicle is still under a manufacturer or extended warranty that could cover this work.",
+            "Get a second opinion from an independent mechanic for safety-critical work before approving.",
+        ]
+
+    if ac_matched:
+        questions += [
+            "What diagnostic fault code or symptom led to the compressor/refrigerant recommendation?",
+            "Is the unit still under manufacturer or extended warranty?",
+            "What refrigerant type and quantity does the job require, and is that reflected in the price?",
+        ]
+        verify += [
+            "Get the unit's model/serial number and confirm its warranty status before approving.",
+            "Confirm a refrigerant leak was actually located, not just assumed from low pressure.",
+            "Ask whether a full system replacement was considered instead of a compressor repair, and why.",
+        ]
+
+    if home_matched:
+        questions += [
+            "Can you provide a written scope of work broken down by task (plumbing, electrical, etc.)?",
+            "What is the estimated labor-hours and materials cost for each task?",
+            "Are permits required for any of this work, and who is responsible for obtaining them?",
+        ]
+        verify += [
+            "Request an itemized scope-of-work document before work begins.",
+            "Confirm whether permits are required for any electrical or plumbing work.",
+            "Check the contractor's license and insurance before approving work on your property.",
+        ]
+
+    if generic_charge_matched:
+        questions += [
+            "Can you itemize exactly what the misc/labour/service charge covers?",
+            "Is this a fixed fee or a time-based labour charge, and what's the hourly rate if applicable?",
+            "Does this charge overlap with cost already included in another line item on the quote?",
+        ]
+        verify += [
+            "Request a line-by-line breakdown of any bundled or generically named charges.",
+            "Confirm this charge isn't duplicating cost already included in another line item.",
+            "Ask whether this charge is negotiable or waivable if you decline related work.",
+        ]
+
+    if not questions:
+        questions = [
+            "Can you resend the quote with itemized parts, labour, and a reason for each recommendation?",
+            "What specific work is being proposed, and what problem is it meant to fix?",
+            "Is this work urgent, or can it wait until you get a second quote?",
+        ]
+        verify = [
+            "Ask for a fully itemized breakdown before evaluating this quote further.",
+            "Confirm what underlying problem or symptom prompted this quote.",
+            "Get the vendor's contact info and a written copy of the quote for your records.",
+        ]
+
+    return questions, verify
+
+
 def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> QuoteCheckResult:
     """
     Analyze a quote using simple keyword heuristics and return a schema-valid
@@ -94,6 +172,7 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
     vehicle_matched = "brake" in text_lower or "tyre" in text_lower or "tire" in text_lower
     ac_matched = any(term in text_lower for term in AC_APPLIANCE_TERMS)
     home_matched = any(term in text_lower for term in HOME_MAINTENANCE_TERMS)
+    generic_charge_matched = any(term in text_lower for term in GENERIC_CHARGE_TERMS)
 
     if "brake" in text_lower:
         items.append(
@@ -195,7 +274,7 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
             )
         )
 
-    if any(term in text_lower for term in GENERIC_CHARGE_TERMS):
+    if generic_charge_matched:
         items.append(
             LineItem(
                 name_raw="Other/unspecified charges (from quote)",
@@ -256,20 +335,18 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
     professional = _verifying_professional(
         vehicle_matched=vehicle_matched, ac_matched=ac_matched, home_matched=home_matched
     )
+    verification_questions, things_to_verify = _domain_questions_and_verification(
+        vehicle_matched=vehicle_matched,
+        ac_matched=ac_matched,
+        home_matched=home_matched,
+        generic_charge_matched=generic_charge_matched,
+    )
 
     return QuoteCheckResult(
         line_items=items,
         overall_summary=overall_summary,
-        verification_questions=[
-            "Can you share photos/measurements/diagnostic evidence that justify each recommended item?",
-            "Which items are safety-critical vs optional preventive maintenance?",
-            "Confirm whether the recommendation is manufacturer-specified or vendor-suggested.",
-        ],
-        things_to_verify=[
-            "Request an itemized parts + labour breakdown for each line item.",
-            "Ask for photos, measurements, or diagnostic evidence supporting each recommended item.",
-            "Confirm whether the recommendation is manufacturer-specified or vendor-suggested.",
-        ],
+        verification_questions=verification_questions,
+        things_to_verify=things_to_verify,
         uncertainty_markers=UncertaintyMarkers(
             ambiguous_items_present=True,
             missing_vehicle_context=True,

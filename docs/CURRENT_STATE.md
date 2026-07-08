@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-008)
+Last updated: 2026-07-08 (TASK-008A)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -111,12 +111,18 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   other/unitemized charges) → a conservative "Other/unspecified charges" catch-all
   with `vague_or_confusing=true`, independent of any other match, so those charges
   are surfaced instead of silently dropped; else a single "needs clarification" item.
-  Top-level `overall_summary`/`verification_questions`/`things_to_verify`/
-  `disclaimer` text is domain-generic by default (e.g. "verify with a qualified
-  professional"), with vehicle-specific phrasing ("brakes/tyres", "certified
-  mechanic") only added when a vehicle item actually matched — no more asserting
-  vehicle language on a non-vehicle quote. This is still keyword matching, not a
-  real line-item parser/extractor or NLP.
+  Top-level `overall_summary`/`disclaimer` text is domain-generic by default (e.g.
+  "verify with a qualified professional"), with vehicle-specific phrasing
+  ("brakes/tyres", "certified mechanic") only added when a vehicle item actually
+  matched — no more asserting vehicle language on a non-vehicle quote.
+  `verification_questions` and `things_to_verify` are built per-domain from the
+  same matched keyword blocks (vehicle/AC/home-maintenance/generic-charge, each
+  combining additively when more than one matches, e.g. a vehicle quote with a
+  bundled charge gets both chunks) so the two bottom report sections are
+  domain-specific and non-duplicate content rather than fixed boilerplate; only the
+  true no-match fallback (nothing domain-specific detected) uses plain clarifying
+  questions. This is still keyword matching, not a real line-item parser/extractor
+  or NLP.
 - OpenAI mode is implemented (strict structured outputs + Pydantic validation).
 - Frontend renders the full result as a quote-understanding report (explanation
   prominent per line item, vague/confusing charges visibly badged, verification
@@ -152,6 +158,28 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-008A
+
+- `backend/core/stub_analyzer.py`: `verification_questions`/`things_to_verify` were
+  changed from fixed static lists to a new `_domain_questions_and_verification()`
+  helper that builds both lists from the same matched keyword blocks (vehicle/AC/
+  home-maintenance/generic-charge established in TASK-008), combining additively
+  when more than one block matches (e.g. a vehicle quote with a bundled charge gets
+  both chunks); only the true no-match fallback (nothing domain-specific detected)
+  falls back to plain clarifying questions. Follow-up to TASK-008 after manual UI
+  verification showed the two bottom report cards ("Questions to ask the vendor" /
+  "Things to verify before approving") read as near-duplicate generic boilerplate
+  across every sample domain. `verification_questions` stays within the schema's
+  3–8 bound (up to 6 for a quote matching two keyword blocks); `things_to_verify`
+  has no upper bound. No change to `backend/core/schema.py`,
+  `backend/core/openai_analyzer.py`, `backend/core/prompt.py`, or any frontend file.
+- All 6 example outputs (`examples/sample_output.json` and the 5 files under
+  `examples/outputs/`) were regenerated from real Demo-mode `/analyze` calls against
+  their unchanged input files, so every example now shows domain-specific vendor
+  questions and verification items instead of the prior shared boilerplate; all
+  still validate against `QuoteCheckResult` with `metadata.model ==
+  "quotecheck-demo-analyzer"`.
 
 ### Fixed in TASK-008
 
