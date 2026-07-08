@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-09 (TASK-010A)
+Last updated: 2026-07-09 (LUXURY-UI-001)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -54,7 +54,18 @@ JSONL log record per request.
   primitive) sits next to the run-metadata line, derived from
   `result.metadata.model` — no separate flag or endpoint.
   Single light theme (`frontend/src/index.css` token set); no dark mode.
-  React 19 + Vite 7.
+  React 19 + Vite 7. Visual identity (LUXURY-UI-001): inline style objects were
+  extracted into CSS classes; the accent color moved off the default
+  Tailwind-blue to a deep ink-teal (`--accent`), the report opens with a
+  document-style header (title + a risk-tally chip row using the same
+  client-side counts), section headings use a small-caps label treatment, risk/
+  vague/mode badges render as a neutral pill with a colored dot + colored label
+  text (`Pill`/`RiskPill`/`VagueBadge`/`ModeBadge` unchanged in signature/usage
+  except `Pill` now takes `{ fg, label }` instead of `{ bg, border, fg, label }`),
+  and the report has a subtle fade/rise reveal on first render (skipped under
+  `prefers-reduced-motion: reduce`). Component structure, props, data flow, and
+  every rendered field are unchanged. `frontend/index.html` no longer references
+  the default Vite favicon (no replacement asset added).
 
 ## Commands
 
@@ -168,6 +179,39 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in LUXURY-UI-001
+
+- `frontend/src/App.jsx`: extracted inline JSX style objects into CSS classes
+  (`frontend/src/index.css`) so the report reads as a calm review document
+  rather than a generic component-library UI. Added a document-style report
+  header (title + risk-tally chips, same client-side `riskCounts` computation
+  as before) replacing the bare `h2`+inline-strip; section labels ("Line
+  items, explained", "Before you approve") restyled as small-caps labels.
+  `Pill` (and `RiskPill`/`VagueBadge`/`ModeBadge`, which call it) restyled from
+  a filled-tint badge to a neutral pill with a colored dot + colored label
+  text; `Pill`'s prop shape changed from `{ bg, border, fg, label }` to
+  `{ fg, label }` (internal to `App.jsx`, not a public/API change).
+  `getRiskColors()` no longer returns an unused `bg` field. Component
+  structure (`App`, `LineItemCard`, `Pill`/`RiskPill`/`VagueBadge`/`ModeBadge`,
+  `Card`), all props consumed from `/analyze` responses, and all rendered
+  fields are unchanged.
+- `frontend/src/index.css`: replaced the Tailwind-blue accent (`#2563eb`) with
+  a deep ink-teal (`--accent: #0f4c46`); added a spacing scale
+  (`--space-1`..`--space-7`), radius tokens, and warmed the background/border
+  tokens slightly; added the new component classes referenced above
+  (`.qc-*`); kept `.two-col-grid` and `.status-pulse` (existing selectors,
+  refined colors only); added a report-reveal fade/rise animation gated on
+  `prefers-reduced-motion: no-preference`. No new dependencies (no fonts, no
+  icon libraries).
+- `frontend/index.html`: removed the default Vite favicon `<link>` reference
+  (no replacement asset added — none was approved); title and viewport meta
+  unchanged.
+- No backend changes; `/analyze` request/response shape and every currently
+  rendered field are unchanged; sample quote text, loading-stage labels,
+  timeout logic, error-kind copy, and mode-badge logic are all unchanged. See
+  `docs/review/REVIEW_BUNDLE__LUXURY-UI-001-distinctive-public-ui.md` for
+  exact validation commands/output and manual-browser-check evidence.
 
 ### Fixed in TASK-010A
 
