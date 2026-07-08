@@ -30,27 +30,45 @@ Real OpenAI calls are opt-in — see [Demo mode vs. OpenAI mode](#demo-mode-vs-o
 
 ### Prereqs
 
-- Python 3.10+ **in an activated environment** (conda recommended below — there is no
-  committed `environment.yml`/lockfile yet, only a pinned `backend/requirements.txt`;
-  see [Limitations](#limitations))
+- Python 3.10+ (there is no committed `environment.yml`/lockfile yet, only a pinned
+  `backend/requirements.txt`; see [Limitations](#limitations))
 - Node 18+ / npm
 - WSL2 Ubuntu 22 works great
 
-### 1) Backend
-
-From repo root, with your environment activated:
+### 0) Clone
 
 ```bash
-conda create -n quotecheck python=3.11 -y
-conda activate quotecheck
-pip install -r backend/requirements.txt
-uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
+git clone https://github.com/akshayv177/quotecheck-v0
+cd quotecheck-v0
 ```
 
-Sanity check:
+### 1) Backend
+
+From repo root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
+QUOTECHECK_USE_OPENAI=0 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+`QUOTECHECK_USE_OPENAI=0` is already the default even without setting it explicitly (no
+`backend/.env` needed) — it's shown here so it's obvious at a glance that this command
+cannot make a paid OpenAI call. Prefer conda? `conda create -n quotecheck python=3.11 -y
+&& conda activate quotecheck` works the same way in place of the `venv` step above.
+
+Sanity check (in another terminal, with the backend still running):
 
 ```bash
 curl http://localhost:8000/health
+```
+
+Analyze a sample quote in Demo mode without opening the frontend:
+
+```bash
+curl -s -X POST http://localhost:8000/analyze -H "Content-Type: application/json" \
+  -d "$(python3 -c 'import json; print(json.dumps({"quote_text": open("examples/quote_ac_repair.txt").read()}))')"
 ```
 
 ### 2) Frontend
@@ -221,8 +239,8 @@ changes.
   price check.
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
   Reproducibility today relies on activating a compatible Python 3.10+ environment
-  yourself (conda steps above); a fully pinned/reproducible environment file is a
-  future setup improvement, not something this repo guarantees yet.
+  yourself (`venv` or conda steps above); a fully pinned/reproducible environment file is
+  a future setup improvement, not something this repo guarantees yet.
 - No repair/retry when model output fails schema validation (planned).
 - No eval harness or automated test suite yet (`docs/CURRENT_STATE.md` has the full
   gap list).
@@ -266,6 +284,7 @@ backend/
     stub_analyzer.py
     openai_analyzer.py
   .env.example
+  requirements.txt
 
 frontend/
   src/App.jsx
