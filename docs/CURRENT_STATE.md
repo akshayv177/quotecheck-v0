@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-08 (TASK-002)
+Last updated: 2026-07-08 (TASK-003)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -27,8 +27,13 @@ JSONL log record per request.
   untracked `backend/.env` (template: `backend/.env.example`).
 - `backend/core/run_logger.py` / `logs/app_runs.jsonl` — append-only JSONL run logs.
 - `backend/core/schema_export.py` — JSON Schema export used by the OpenAI analyzer.
-- `frontend/src/App.jsx` — entire UI: textarea → Analyze → line-item table, summary /
-  questions / verify / metadata cards, raw JSON view. React 19 + Vite 7.
+- `frontend/src/App.jsx` — entire UI: textarea → Analyze → quote-understanding
+  report (summary card, then one card per line item with `explanation` as the
+  prominent field, `rationale_short` as secondary risk reasoning, a risk pill,
+  a "NEEDS CLARIFICATION" badge when `vague_or_confusing` is true, and
+  `evidence_needed` as a secondary bullet list), "Questions to ask the vendor" /
+  "Things to verify before approving" / metadata cards, raw JSON view. React 19 +
+  Vite 7.
 
 ## Commands
 
@@ -77,7 +82,10 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
   instead of silently dropped; else a single "needs clarification" item. This is
   still keyword matching, not a real line-item parser/extractor.
 - OpenAI mode is implemented (strict structured outputs + Pydantic validation).
-- Frontend renders the full result and can copy raw JSON.
+- Frontend renders the full result as a quote-understanding report (explanation
+  prominent per line item, vague/confusing charges visibly badged, verification
+  questions and things-to-verify grouped with vendor-facing headers) and can copy
+  raw JSON.
 - Every request logs one JSONL record (request_id, prompt_version, model, latency,
   schema_valid, risk counts, uncertainty, error).
 - Secrets hygiene: `backend/.env` and `logs/` are gitignored and untracked.
@@ -95,6 +103,22 @@ Modes: copy `backend/.env.example` to `backend/.env`; `QUOTECHECK_USE_OPENAI=0`
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in TASK-003
+
+- `frontend/src/App.jsx`: replaced the flat line-item `<table>` with one card per
+  line item so `explanation` (already returned by the backend since TASK-002, but
+  never rendered) is now the prominent, human-readable field; `rationale_short` is
+  shown as secondary risk reasoning; a new "NEEDS CLARIFICATION" badge
+  (`VagueBadge`, built on a generalized `Pill` primitive shared with `RiskPill`)
+  appears when `vague_or_confusing` is true; `evidence_needed` is now rendered as a
+  secondary bullet list per item (previously unrendered). The Summary card moved
+  above the line items; "Verification questions" / "Things to verify" cards were
+  relabeled "Questions to ask the vendor" / "Things to verify before approving".
+  Default sample quote text updated to include a generic-charge keyword ("misc")
+  so the out-of-box demo shows all 3 stub items (brake/tyre/other-unspecified)
+  including the vague badge. No backend files changed; `/analyze` response shape
+  is unchanged — this only renders fields the backend already returns.
 
 ### Fixed in TASK-002
 
