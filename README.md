@@ -29,7 +29,6 @@ From repo root:
 conda create -n quotecheck python=3.11 -y
 conda activate quotecheck
 pip install -r backend/requirements.txt
-pip install python-dotenv
 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 ````
 
@@ -71,7 +70,7 @@ Stub mode (default, zero cost)
 OpenAI mode (real model calls)
 * `QUOTECHECK_USE_OPENAI=1` 
 * `OPENAI_API_KEY=your_key_here` 
-* `QUOTECHECK_MODEL=gpt-40-mini`
+* `QUOTECHECK_MODEL=gpt-4o-mini`
 
 > `backend/.env` is gitignored. Never commit secrets.
 
