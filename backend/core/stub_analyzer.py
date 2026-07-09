@@ -324,7 +324,7 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
     overall_summary = [
         "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
         "Any generically named, bundled, or unclear charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
-        "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made.",
+        "Price benchmarking is not implemented; no market price comparison is being made.",
     ]
     if vehicle_matched:
         overall_summary.insert(
@@ -354,8 +354,10 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         ),
         refusals=[],
         disclaimer=(
-            "QuoteCheck is a v0 prototype; results may be incomplete or wrong. "
-            f"Not safety advice; verify with a {professional}. QuoteCheck "
+            "QuoteCheck results may be incomplete or wrong. This analysis is "
+            "informational and should not replace professional advice, official "
+            "estimates, warranty terms, or a second opinion for high-value or "
+            f"safety-critical work — verify with a {professional}. QuoteCheck "
             "explains quotes and suggests questions; it does not verify vendor "
             "claims, guarantee fair pricing, or perform price benchmarking."
         ),

@@ -147,14 +147,12 @@ export default function App() {
   return (
     <div className="qc-shell">
       <header className="qc-header">
-        <div className="qc-header__title-row">
-          <h1 className="qc-wordmark">QuoteCheck</h1>
-          <span className="qc-chip">v0 prototype</span>
-        </div>
-        <div className="qc-header__tagline">
-          Paste a service or repair quote. QuoteCheck explains every line item, flags
-          what's vague or risky, and gives you questions to send back — before you approve.
-        </div>
+        <h1 className="qc-wordmark">QuoteCheck</h1>
+        <p className="qc-header__subhead">Understand quotes before you approve them.</p>
+        <p className="qc-header__intro">
+          Paste a service, repair, or parts quote. QuoteCheck explains line items,
+          flags vague or risky charges, and suggests questions to ask the vendor.
+        </p>
       </header>
 
       <div className="qc-input-card">
