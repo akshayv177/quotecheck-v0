@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-09 (LUXURY-UI-001A)
+Last updated: 2026-07-09 (TASK-012)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -25,9 +25,16 @@ JSONL log record per request.
   demo-mode responses and JSONL logs never claim an OpenAI model was called.
 - `backend/core/openai_analyzer.py` — OpenAI Responses API with strict JSON-schema
   structured output, then Pydantic validation; server overrides metadata.
-- `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.2`),
+- `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.3`),
   explanation-first: every line item must carry a plain-English `explanation` before
   risk judgment, and vague/bundled charges must be flagged via `vague_or_confusing`.
+  Generic across domains (vehicle, appliance/HVAC, home/contractor, other services)
+  as of TASK-012: `missing_vehicle_context` is only set `true` when a quote is
+  clearly vehicle-related and vehicle context is actually missing; the disclaimer
+  only names a specific professional (e.g. "certified mechanic") for clearly
+  vehicle-related quotes and otherwise stays generic; the model is explicitly told
+  not to characterize a quote/charge as high/low/fair/cheap/expensive/overpriced/
+  underpriced without benchmarking data.
 - `backend/core/config.py` — env-var config: `QUOTECHECK_USE_OPENAI`, `QUOTECHECK_MODEL`
   (default `gpt-4o-mini`), `QUOTECHECK_LOG_PATH`, `OPENAI_API_KEY`, and
   `DEMO_ANALYZER_MODEL` (fixed label, not env-configurable). Loaded from untracked
@@ -168,11 +175,12 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
 - Scope is still narrower than the SPEC.md target (general service / repair / parts /
-  vendor quotes): the `NormalizedCategory` taxonomy and the OpenAI-mode prompt
-  (`backend/core/prompt.py`) remain vehicle-service-flavored. The Demo-mode stub's
-  keyword coverage was broadened in TASK-008 (vehicle, AC/appliance, home
-  maintenance) but is still a small fixed keyword list, not real language
-  understanding, and only covers Demo mode.
+  vendor quotes): the `NormalizedCategory` taxonomy remains vehicle-service-flavored.
+  The OpenAI-mode prompt's copy was made domain-generic in TASK-012 (see below), but
+  the taxonomy itself is unchanged. The Demo-mode stub's keyword coverage was
+  broadened in TASK-008 (vehicle, AC/appliance, home maintenance) but is still a
+  small fixed keyword list, not real language understanding, and only covers Demo
+  mode.
 - Price benchmarking does not exist.
 - Stub's generic-charge catch-all is a fixed keyword list, not real line-item
   extraction; a quote whose vague charges don't match one of those keywords still
@@ -212,6 +220,35 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   timeout logic, error-kind copy, and mode-badge logic are all unchanged. See
   `docs/review/REVIEW_BUNDLE__LUXURY-UI-001-distinctive-public-ui.md` for
   exact validation commands/output and manual-browser-check evidence.
+
+### Fixed in TASK-012
+
+- `backend/core/prompt.py`: reworded `SYSTEM_PROMPT`/`DEVELOPER_PROMPT` (OpenAI mode
+  only) to remove leftover vehicle/mechanic bias found via manual testing with a
+  non-vehicle AC repair quote. `SYSTEM_PROMPT` now states the assistant's scope
+  covers repair/maintenance/parts/vendor quotes "across any domain ... — not
+  vehicle-only". `DEVELOPER_PROMPT` changes: (1) `missing_vehicle_context` is only
+  set `true` when the quote is clearly vehicle-related and vehicle context is
+  actually missing, and must be `false` for every other domain (previously the
+  instruction only ever said when to set it `true`, defaulting the model toward
+  `true` on non-vehicle quotes); (2) the model is now explicitly told not to
+  describe a quote/charge as high/low/fair/cheap/expensive/overpriced/underpriced
+  without benchmarking data (which is not implemented), and to phrase pricing
+  uncertainty as "needs clarification"/"verify the basis for this charge" instead;
+  (3) the disclaimer instruction no longer hardcodes "verify with a certified
+  mechanic" — it now uses generic professional-advice wording by default and only
+  names a specific professional for clearly vehicle-related quotes.
+  `PROMPT_VERSION` bumped `quotecheck_v0.2` → `quotecheck_v0.3`.
+- `backend/core/stub_analyzer.py`: inspected, no changes needed — its disclaimer
+  and per-domain professional wording were already generalized in TASK-008/
+  TASK-008A. Out-of-scope observation: demo-mode uncertainty markers still use a
+  broad default for `missing_vehicle_context`. This ticket focuses on OpenAI
+  prompt behavior before recording and does not regenerate deterministic demo
+  outputs.
+- No schema, frontend, or dependency changes. `/analyze` request/response shape is
+  unchanged; this only changes what OpenAI mode is instructed to output. See
+  `docs/review/REVIEW_BUNDLE__TASK-012-openai-generic-service-copy.md` for exact
+  validation commands/output.
 
 ### Fixed in LUXURY-UI-001A
 
