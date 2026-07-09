@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-09 (LUXURY-UI-001)
+Last updated: 2026-07-09 (LUXURY-UI-001A)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -212,6 +212,52 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   timeout logic, error-kind copy, and mode-badge logic are all unchanged. See
   `docs/review/REVIEW_BUNDLE__LUXURY-UI-001-distinctive-public-ui.md` for
   exact validation commands/output and manual-browser-check evidence.
+
+### Fixed in LUXURY-UI-001A
+
+- `frontend/src/App.jsx`: removed the "v0 prototype" chip from the app header
+  (it no longer appears next to the QuoteCheck wordmark anywhere in the UI).
+  Restructured the header into a three-line hierarchy — `h1` wordmark, a new
+  `qc-header__subhead` ("Understand quotes before you approve them."), and a
+  `qc-header__intro` body paragraph (reworded from the prior single tagline) —
+  replacing the old wordmark+chip row and single tagline `div`. No other JSX
+  changed: input card, loading, error card, report, footer, and every
+  component (`LineItemCard`, `Pill`/`RiskPill`/`VagueBadge`/`ModeBadge`,
+  `Card`) are unchanged; the Demo/OpenAI mode badge still renders in the
+  report footer.
+- `frontend/src/index.css`: removed `.qc-chip` and `.qc-header__title-row`
+  (both dead after the chip removal); added `.qc-header__subhead` and
+  `.qc-header__intro` (replacing `.qc-header__tagline`); the intro
+  paragraph's prior `max-width: 62ch` cap was dropped so it spans the same
+  width as the input card and report below — header, intro copy, input card,
+  and report title now share one left-aligned grid inside `.qc-shell`
+  (verified via headless-browser bounding-rect checks; all four sit at the
+  same left edge). Overall page width is still bounded by `.qc-shell`'s
+  existing `max-width: 880px` — nothing was made full-width.
+- `backend/core/stub_analyzer.py` (tiny copy-only exception, approved for this
+  ticket): the Demo-mode `disclaimer` and one `overall_summary` line were the
+  only place the "v0 prototype" phrase was still visibly rendered in the
+  product UI (in the report footer / Summary card, sourced from the backend
+  response) — the header-only fix above didn't touch it. Reworded both
+  strings to drop "v0 prototype"/"prototype" while preserving the same
+  limitations: the disclaimer now reads "QuoteCheck results may be incomplete
+  or wrong. This analysis is informational and should not replace
+  professional advice, official estimates, warranty terms, or a second
+  opinion for high-value or safety-critical work — verify with a
+  {professional}. QuoteCheck explains quotes and suggests questions; it does
+  not verify vendor claims, guarantee fair pricing, or perform price
+  benchmarking."; the summary line now reads "Price benchmarking is not
+  implemented; no market price comparison is being made." Copy-only: no
+  schema change, no `/analyze` behavior change, no analyzer logic change
+  (the dynamic `{professional}` selection is unchanged), no new fields.
+  `backend/core/prompt.py` (OpenAI-mode prompt) was checked and does not
+  reference "prototype" anywhere, so it was left untouched, per the same
+  exception's scope.
+- No other backend/API/schema change; `/analyze` request/response shape and
+  every rendered field are otherwise unchanged; no new dependencies. See
+  `docs/review/REVIEW_BUNDLE__LUXURY-UI-001A-final-header-alignment-polish.md`
+  for exact validation commands/output and manual-browser-check evidence
+  (including screenshots).
 
 ### Fixed in TASK-010A
 
