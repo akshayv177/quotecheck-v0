@@ -124,9 +124,7 @@ contractor, a vague-charges parts quote, and a genuinely vague quote — are in
 
 ## Screenshot
 
-*(No screenshot committed yet — no placeholder or mocked-up image is used in its
-place.)* To add one, follow [`docs/LOCAL_DEMO.md`](docs/LOCAL_DEMO.md#8-screenshot-capture-location)
-and save a real capture of the report view at `docs/assets/quotecheck-demo-ui.png`.
+![QuoteCheck UI showing a structured service quote analysis report](docs/assets/quotecheck-ui.png)
 
 ---
 
