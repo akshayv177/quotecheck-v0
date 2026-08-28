@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-27 (QC-1A)
+Last updated: 2026-08-28 (QC-1B)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -29,16 +29,19 @@ JSONL log record per request.
   overrides metadata. Default model `gpt-4o-mini` (`QUOTECHECK_MODEL`). An
   OpenAI-path failure returns an error to the caller; it does not fall back to Demo
   output.
-- `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.3`),
+- `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.4`),
   explanation-first: every line item must carry a plain-English `explanation` before
   risk judgment, and vague/bundled charges must be flagged via `vague_or_confusing`.
-  Generic across domains (vehicle, appliance/HVAC, home/contractor, other services)
-  as of TASK-012: `missing_vehicle_context` is only set `true` when a quote is
-  clearly vehicle-related and vehicle context is actually missing; the disclaimer
-  only names a specific professional (e.g. "certified mechanic") for clearly
-  vehicle-related quotes and otherwise stays generic; the model is explicitly told
-  not to characterize a quote/charge as high/low/fair/cheap/expensive/overpriced/
-  underpriced without benchmarking data.
+  Generic across domains (vehicle, appliance/HVAC, home/contractor, other services):
+  the uncertainty markers are domain-neutral (QC-1B) — `missing_quote_context` is set
+  `true` only when the quote omits contextual detail needed to interpret a
+  recommendation confidently (scope, symptoms, quantities, diagnostic basis), and
+  `needs_professional_confirmation` `true` when technical/safety-sensitive work
+  should be checked by an appropriate qualified professional, with no assumed trade;
+  the disclaimer only names a specific professional (e.g. "certified mechanic") for
+  clearly vehicle-related quotes and otherwise stays generic; the model is
+  explicitly told not to characterize a quote/charge as high/low/fair/cheap/
+  expensive/overpriced/underpriced without benchmarking data.
 - `backend/core/config.py` — env-var config: `QUOTECHECK_USE_OPENAI`, `QUOTECHECK_MODEL`
   (default `gpt-4o-mini`), `QUOTECHECK_LOG_PATH`, `OPENAI_API_KEY`, and
   `DEMO_ANALYZER_MODEL` (fixed label, not env-configurable). Loaded from untracked
@@ -191,7 +194,67 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   extraction; a quote whose vague charges don't match one of those keywords still
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
-  `missing_vehicle_context`) rather than per line item.
+  `missing_quote_context`) rather than per line item.
+
+### Fixed in QC-1B
+
+Small contract / provenance hardening before the eval harness (QC-3) is built. No
+new product capability; `NormalizedCategory` deliberately untouched.
+
+- **Domain-neutral uncertainty contract.** `UncertaintyMarkers` fields
+  `missing_vehicle_context` → `missing_quote_context` and
+  `needs_mechanic_confirmation` → `needs_professional_confirmation`
+  (`backend/core/schema.py`), each with a precise `Field(description=...)`. No
+  back-compat aliases (there are no known consumers). New semantics:
+  `missing_quote_context` = the quote omits contextual information needed to
+  interpret one or more recommendations confidently (scope, symptoms, quantities,
+  diagnostic basis, other material detail) — not a synonym for "contains a vague
+  line item"; `needs_professional_confirmation` = one or more technical or
+  safety-sensitive recommendations should be confirmed by an appropriate qualified
+  professional, stated domain-neutrally.
+- **Prompt.** `backend/core/prompt.py` `DEVELOPER_PROMPT` now instructs both new
+  fields with domain-generic wording and no assumed trade; the price-benchmarking /
+  fairness prohibition and the rest of the prompt are unchanged. `PROMPT_VERSION`
+  bumped `quotecheck_v0.3` → `quotecheck_v0.4` (renamed, redefined model-visible
+  output fields).
+- **Demo uncertainty behavior.** `backend/core/stub_analyzer.py` no longer
+  hardcodes `missing_vehicle_context=True` / `needs_mechanic_confirmation=True`.
+  Deterministic, transparent heuristics instead: `missing_quote_context` is `true`
+  only when the quote text contains an explicit missing/deferred/externalised-context
+  phrase (fixed `MISSING_CONTEXT_PHRASES` substring list) **or** the quote resolves
+  to nothing but generic/bundled charges with no substantive service item; failing
+  to recognise a domain alone never sets it. `needs_professional_confirmation` is
+  `true` when a line item is `red` risk or `safety_critical` category (keys off
+  risk/category, never a trade name). `ambiguous_items_present` is unchanged
+  (still constant `true` — deliberately out of QC-1B scope).
+- **Failure provenance.** `backend/app.py` failure-path logging is now mode-aware:
+  a Demo-mode failure logs `model = quotecheck-demo-analyzer` (was always
+  `gpt-4o-mini`); an OpenAI-mode failure logs the configured `QUOTECHECK_MODEL`.
+  No new field, no `run_logger.py` change.
+- **Misleading fallback wording.** `stub_analyzer.py` module docstring no longer
+  says it "provides a deterministic fallback if OpenAI is unavailable" — the
+  analyzer is selected once by configuration and an OpenAI failure returns an
+  error, it does not switch to the stub. Comment-only.
+- **Dead schema plumbing removed.** `build_messages()` never used its `schema_json`
+  argument; removed it, plus the now-orphaned
+  `schema_export.quotecheck_result_schema_json()` helper and its call in
+  `openai_analyzer.py`. The only Structured Outputs path is unchanged:
+  `QuoteCheckResult` → `quotecheck_result_schema_obj()` →
+  `client.responses.create(... text.format.schema ...)`.
+- **Examples regenerated.** All six committed Demo outputs
+  (`examples/sample_output.json`, `examples/outputs/*.json`) were regenerated by
+  replaying their unchanged input files through the real Demo-mode `/analyze`
+  endpoint (`QUOTECHECK_USE_OPENAI=0`, no API call). Every file validates against
+  `QuoteCheckResult`, reports `metadata.model = quotecheck-demo-analyzer` and
+  `prompt_version = quotecheck_v0.4`, carries the new uncertainty field names, and
+  no longer contains the stale `quotecheck_v0.2` / `v0 prototype` wording that the
+  previous captures still had. New deterministic `missing_quote_context`:
+  `false` for the two vehicle quotes and the AC quote; `true` for the
+  home-maintenance, parts/labour-misc, and vague-missing-details quotes.
+  `needs_professional_confirmation`: `true` for the two vehicle quotes (brake =
+  red / safety_critical), `false` for the rest.
+- No frontend change (`frontend/src/App.jsx` never referenced the uncertainty
+  markers). No dependency, deployment, eval-harness, retry, or taxonomy work.
 
 ### Fixed in QC-1A
 

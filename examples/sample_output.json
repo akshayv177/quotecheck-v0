@@ -55,7 +55,7 @@
         "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
         "Safety-critical items (like brakes/tyres) should be verified with evidence before approval.",
         "Any generically named, bundled, or unclear charges are marked as needing clarification; ask the vendor for an itemized breakdown.",
-        "Price benchmarking is not implemented in this v0 prototype; no market price comparison is being made."
+        "Price benchmarking is not implemented; no market price comparison is being made."
     ],
     "verification_questions": [
         "Can you share photos or measurements (pad thickness, tread depth) that support the brake/tyre recommendation?",
@@ -75,16 +75,16 @@
     ],
     "uncertainty_markers": {
         "ambiguous_items_present": true,
-        "missing_vehicle_context": true,
-        "needs_mechanic_confirmation": true
+        "missing_quote_context": false,
+        "needs_professional_confirmation": true
     },
     "refusals": [],
-    "disclaimer": "QuoteCheck is a v0 prototype; results may be incomplete or wrong. Not safety advice; verify with a certified mechanic. QuoteCheck explains quotes and suggests questions; it does not verify vendor claims, guarantee fair pricing, or perform price benchmarking.",
+    "disclaimer": "QuoteCheck results may be incomplete or wrong. This analysis is informational and should not replace professional advice, official estimates, warranty terms, or a second opinion for high-value or safety-critical work — verify with a certified mechanic. QuoteCheck explains quotes and suggests questions; it does not verify vendor claims, guarantee fair pricing, or perform price benchmarking.",
     "metadata": {
-        "prompt_version": "quotecheck_v0.2",
+        "prompt_version": "quotecheck_v0.4",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-07-08T16:35:18.109813Z",
-        "request_id": "01f493b6-18c1-4df7-bae5-4aa95f6e044f",
+        "created_at": "2026-08-28T06:58:51.998352Z",
+        "request_id": "d18f4cb6-855d-46ac-8a71-ac492010e0af",
         "latency_ms": 0,
         "schema_valid": true
     }

@@ -1,16 +1,14 @@
 """
 Schema Export Utilities (v0)
 
-Provides a stable way to export the QuoteCheckResult JSON schema.
-This is useful for:
-- embedding schema in prompts (Slice 3)
-- documentation
-- evaluation tooling
+Provides a stable way to export the QuoteCheckResult JSON schema as a dict,
+post-processed to satisfy OpenAI strict Structured Outputs. This is the single
+schema path used by the OpenAI analyzer (``text.format.schema``); it is also
+useful for documentation and evaluation tooling.
 """
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List
 
 from backend.core.schema import QuoteCheckResult
@@ -94,8 +92,3 @@ def quotecheck_result_schema_obj() -> Dict[str, Any]:
     schema = QuoteCheckResult.model_json_schema()
     schema = _normalize_for_openai_strict(schema)
     return schema
-
-
-def quotecheck_result_schema_json() -> str:
-    """Return the QuoteCheckResult JSON schema as a JSON string."""
-    return json.dumps(quotecheck_result_schema_obj(), ensure_ascii=False)

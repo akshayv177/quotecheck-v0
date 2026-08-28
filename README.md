@@ -227,7 +227,7 @@ tail -n 1 logs/app_runs.jsonl | python3 -m json.tool
 ```
 
 Prompt artifacts live in `backend/core/prompt.py`; `PROMPT_VERSION`
-(`quotecheck_v0.3`) is included in both API responses and run logs so prompt changes
+(`quotecheck_v0.4`) is included in both API responses and run logs so prompt changes
 are traceable as versioned product changes.
 
 ### OpenAI mode
