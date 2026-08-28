@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-07-09 (TASK-012)
+Last updated: 2026-08-27 (QC-1A)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -23,8 +23,12 @@ JSONL log record per request.
   fallback (TASK-008). Reports `metadata.model = "quotecheck-demo-analyzer"`
   (`config.DEMO_ANALYZER_MODEL`), a label distinct from `QUOTECHECK_MODEL`, so
   demo-mode responses and JSONL logs never claim an OpenAI model was called.
-- `backend/core/openai_analyzer.py` — OpenAI Responses API with strict JSON-schema
-  structured output, then Pydantic validation; server overrides metadata.
+- `backend/core/openai_analyzer.py` — OpenAI Responses API with strict Structured
+  Outputs (JSON Schema generated from the Pydantic `QuoteCheckResult` contract via
+  `schema_export.py`), then final Pydantic validation of the response; server
+  overrides metadata. Default model `gpt-4o-mini` (`QUOTECHECK_MODEL`). An
+  OpenAI-path failure returns an error to the caller; it does not fall back to Demo
+  output.
 - `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.3`),
   explanation-first: every line item must carry a plain-English `explanation` before
   risk judgment, and vague/bundled charges must be flagged via `vague_or_confusing`.
@@ -161,32 +165,77 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - Project-status/run docs (TASK-010): `docs/PROJECT_STATUS.md` (public-ready vs.
   still-limited vs. not-to-overclaim summary) and `docs/LOCAL_DEMO.md` (neutral local
   run guide: start backend/frontend, verify `/health` and `/analyze`, optional OpenAI
-  mode, screenshot capture location), both linked from README's Limitations section.
-  `docs/assets/` exists (currently only a `.gitkeep`) as the drop location for a
-  future real screenshot; no screenshot is committed and no placeholder image is
-  used.
+  mode), both linked from README's Limitations section. A real UI screenshot is
+  committed at `docs/assets/quotecheck-ui.png` and embedded in `README.md`.
 
 ## Gaps
 
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
   Reproducibility depends on the developer activating a compatible Python 3.10+
   environment themselves (README documents a conda-based path).
-- No backend tests, no eval harness, no CI. `docs/` and `eval/` were empty until TASK-000.
+- No backend tests, no automated eval / regression harness, no CI.
+- No verified public deployment.
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
-- Scope is still narrower than the SPEC.md target (general service / repair / parts /
-  vendor quotes): the `NormalizedCategory` taxonomy remains vehicle-service-flavored.
-  The OpenAI-mode prompt's copy was made domain-generic in TASK-012 (see below), but
-  the taxonomy itself is unchanged. The Demo-mode stub's keyword coverage was
-  broadened in TASK-008 (vehicle, AC/appliance, home maintenance) but is still a
-  small fixed keyword list, not real language understanding, and only covers Demo
-  mode.
-- Price benchmarking does not exist.
+- The deterministic Demo analyzer and the shared `NormalizedCategory` taxonomy
+  remain narrower than the general service / repair / parts / vendor product scope,
+  and carry vehicle-era wording. The OpenAI-mode prompt's copy was made domain-generic
+  in TASK-012 (see below), but the taxonomy itself is unchanged. The Demo-mode stub's
+  keyword coverage was broadened in TASK-008 (vehicle, AC/appliance, home maintenance)
+  but is still a small fixed keyword list, not real language understanding, and only
+  covers Demo mode.
+- No market-price benchmarking and no objective price-fairness judgment anywhere in
+  the system.
+- No verification of vendor claims against external authoritative sources.
 - Stub's generic-charge catch-all is a fixed keyword list, not real line-item
   extraction; a quote whose vague charges don't match one of those keywords still
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_vehicle_context`) rather than per line item.
+
+### Fixed in QC-1A
+
+Documentation truth-alignment pass — no source code, examples, logs, or config
+behaviour changed. Public docs now describe only the current implemented system.
+
+- `README.md`: retitled to "QuoteCheck — Service Quote Review Assistant"; removed the
+  "v0" product framing and the "v0 prototype" disclaimer wording; replaced the
+  "vehicle-service-flavored" scope paragraph with an accurate split (the OpenAI path
+  and its prompt are domain-generic; the Demo heuristics and the `NormalizedCategory`
+  taxonomy are narrower, with vehicle-era wording); added an explicit
+  product-boundary list (no market-price benchmarking, no price-fairness judgment, no
+  vendor-trust scoring, no external claim verification); rewrote Architecture to show
+  the real configuration-selected single-analyzer flow and that an OpenAI failure
+  returns an error rather than switching to Demo; added "OpenAI mode" (Responses API
+  + Structured Outputs generated from the Pydantic contract, `gpt-4o-mini` default),
+  "Demo mode" (deterministic, zero-key, heuristic — not equivalent to OpenAI mode),
+  and "Evaluation" (six captured examples, schema validation, historical manual QA;
+  no automated harness) subsections; tightened Limitations; removed the
+  `eval/ (coming next)` line from the repo tree (no such directory exists).
+- `SPEC.md`: removed "optional market price checks" from present-tense positioning;
+  broadened positioning to service/maintenance/repair/parts/vendor review;
+  distinguished the domain-generic OpenAI prompt from the narrower Demo
+  heuristics/taxonomy; expanded non-goals (price fairness, vendor verification);
+  replaced "v0 prototype" limitation wording with "early-stage implementation".
+- `docs/PROJECT_STATUS.md`: dropped "v0" from the title; corrected the claim that the
+  OpenAI-mode prompt is vehicle-service-flavored; replaced "No screenshot committed
+  yet" with the committed `docs/assets/quotecheck-ui.png`; added a compact "Planned
+  hardening (not yet built)" list.
+- `docs/LOCAL_DEMO.md`: rewrote the screenshot section (screenshot is now committed;
+  corrected the stale `quotecheck-demo-ui.png` filename to `quotecheck-ui.png`);
+  added `npm install` to the frontend run steps.
+- `docs/CURRENT_STATE.md`: this entry; updated the `Last updated` line; corrected the
+  OpenAI-path and screenshot facts; added "no verified public deployment" and vendor
+  /price-fairness bullets to Gaps.
+- `CLAUDE.md`: removed the stale "v0 prototype" and "optional market price checks"
+  product wording from the intro paragraph only. Coding-workflow, agent-instruction,
+  and build-protocol sections were not touched.
+
+No QC-1B / QC-3 / QC-4 work exists yet. The stale `quotecheck_v0.2` example outputs
+under `examples/` were intentionally left unchanged (regeneration is out of scope for
+QC-1A). Known implementation issues (e.g. `missing_vehicle_context` /
+`needs_mechanic_confirmation` hardcoding in the Demo stub, no repair/retry, no eval
+harness) were documented here honestly, not fixed.
 
 ### Fixed in LUXURY-UI-001
 

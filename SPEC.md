@@ -6,39 +6,46 @@ QuoteCheck is an AI quote-understanding and quote-checking product. It helps use
 understand confusing service quotes, repair estimates, parts quotes, and vendor
 quotations **before approving them**.
 
-Public positioning: *QuoteCheck turns confusing service and parts quotes into clear
-explanations, red flags, vendor questions, and optional market price checks.*
+Public positioning: *QuoteCheck turns confusing service, maintenance, repair, parts,
+and vendor quotes into clear explanations, red flags, vendor questions, and things to
+verify before approval.*
 
 QuoteCheck is **not audit-only**. Quote understanding comes first: explain what each
-line item is, why it might be recommended, and what is unclear. Optional price
-benchmarking comes later.
+line item is, why it might be recommended, and what is unclear.
 
-## Current v0 scope (what is actually built)
+## Current scope (what is actually built)
 
 - User pastes raw quote text into a web UI (single-page React app).
 - Backend (`POST /analyze`) returns a schema-valid structured result:
   line items with category / recommended action / risk level (red/yellow/green) /
   confidence / short rationale / evidence to request; overall summary; verification
   questions; things to verify; uncertainty markers; mandatory disclaimer; run metadata.
-- Two analyzer modes: a deterministic stub (default, zero cost) and an OpenAI mode
-  (strict structured outputs). Every request is logged as one JSONL record.
-- The current taxonomy, stub heuristics, and prompt are vehicle-service-flavored;
-  broadening to general service/parts/vendor quotes is target scope, not current scope.
+- Two analyzer modes, selected by configuration: a deterministic stub (default, zero
+  cost) and an OpenAI mode (OpenAI Responses API, strict Structured Outputs generated
+  from the Pydantic contract, then Pydantic re-validation). Every request is logged as
+  one JSONL record.
+- The OpenAI-mode prompt and the product framing are domain-generic across service,
+  repair, maintenance, parts, and vendor quotes. The deterministic Demo heuristics and
+  the shared `NormalizedCategory` taxonomy are narrower and still carry vehicle-era
+  wording; broadening the taxonomy is target scope, not current scope.
 
 See `docs/CURRENT_STATE.md` for the precise current architecture, commands, and gaps.
 
-## Non-goals (v0)
+## Non-goals
 
-- No price database or guaranteed market pricing; benchmarking is future and optional.
+- No price database, market-price benchmarking, or objective price-fairness
+  judgment; benchmarking is future and optional.
+- No vendor trustworthiness scoring and no verification of vendor claims against
+  external authoritative data.
 - No authentication, user accounts, or persistent database.
 - No PDF/image/OCR ingestion (paste text only).
-- No professional advice: QuoteCheck does not replace a certified mechanic,
-  contractor, or other professional, and does not tell users what is safe.
+- No professional advice: QuoteCheck does not replace a qualified professional
+  (mechanic, contractor, technician, etc.), and does not tell users what is safe.
 - No production readiness claims: no SLAs, no hardening, no scale guarantees.
 
 ## Target pipeline
 
-The v0 core workflow QuoteCheck is building toward:
+The core workflow QuoteCheck is building toward (target, not all built):
 
 ```
 Quote input
@@ -76,8 +83,8 @@ Every analysis result should provide:
 
 Use wording like this in user-facing text and docs; do not soften it:
 
-- "QuoteCheck is a v0 prototype. Results may be incomplete or wrong."
-- "Not safety advice; verify with a certified professional."
+- "QuoteCheck is an early-stage implementation. Results may be incomplete or wrong."
+- "Not safety advice; verify with a qualified professional."
 - "QuoteCheck explains quotes and suggests questions; it does not verify vendor
   claims or guarantee fair pricing."
 - "Price benchmarking is not implemented; any price commentary is not a market check."
