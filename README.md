@@ -1,24 +1,34 @@
-# QuoteCheck v0 — understand a confusing quote before you approve it
+# QuoteCheck — Service Quote Review Assistant
 
-QuoteCheck turns a messy service, repair, parts, or vendor quote into plain-English
-explanations, red flags, vendor questions, and things to verify — before you approve it.
+QuoteCheck helps you turn messy service, maintenance, repair, parts, and vendor
+quotes into a structured review before you approve them: what each quoted charge
+appears to mean, what is vague or confusing, what evidence you should request, what
+to ask the vendor before approval, and what remains uncertain.
 
-> Disclaimer: **Not safety advice; verify with a certified professional.** This is a
-> **v0 prototype** — see [Limitations](#limitations) below.
+> Disclaimer: **Not safety advice; verify with a qualified professional.** This is an
+> early-stage implementation — see [Limitations](#limitations) below.
 
 ## What it is, who it helps, why it exists
 
-You get a quote from a mechanic, contractor, or vendor. The line items are vague
-("labour", "misc charges"), you don't know which ones are safety-critical vs.
-optional, and you don't know what to ask before you say yes. QuoteCheck is for
-that moment: paste the quote text in, and get back an **explanation-first** report —
-what each item is, why it might be recommended, what's risky or bundled/unclear, and
-concrete questions to send back to the vendor. It exists to help someone understand
-and question a quote, not to replace the professional who ultimately signs off on it.
+You get a quote from a garage, contractor, appliance technician, or other vendor. The
+line items are vague ("labour", "misc charges"), you don't know which ones are
+safety-critical vs. optional, and you don't know what to ask before you say yes.
+QuoteCheck is for that moment: paste the quote text in, and get back an
+**explanation-first** report — what each item is, why it might be recommended, what's
+risky or bundled/unclear, and concrete questions to send back to the vendor. It
+exists to help someone understand and question a quote, not to replace the
+professional who ultimately signs off on it.
 
-Today's scope is vehicle-service-flavored (brakes, tyres, generic charges) as the
-first working slice; `SPEC.md` describes the broader target (general service/repair/
-parts/vendor quotes).
+The OpenAI analysis path and its prompt are domain-generic across service, repair,
+maintenance, parts, and vendor quotes. The deterministic Demo analyzer (below) is
+narrower: its heuristics and the shared result taxonomy still carry vehicle-era
+wording. `SPEC.md` describes the broader target.
+
+### What QuoteCheck does not do
+
+QuoteCheck does **not** benchmark market prices, judge whether a quoted price is
+objectively fair, determine vendor trustworthiness, or verify vendor claims against
+external authoritative data. It does not replace qualified professional advice.
 
 ---
 
@@ -180,26 +190,33 @@ Response: **QuoteCheckResult** (schema-valid JSON) — see
 * `verification_questions[]` ("questions to ask the vendor")
 * `things_to_verify[]`
 * `uncertainty_markers`
-* `metadata` (request_id, prompt_version, model, latency_ms, schema_valid)
+* `metadata` (request_id, prompt_version, model, created_at, latency_ms, schema_valid)
 
 ---
 
 ## Architecture
 
 ```
-Browser (React)
+React/Vite SPA
   |
   |  POST /analyze  (JSON)
   v
-FastAPI Backend
-  - request_id, latency
-  - schema contract (Pydantic)
-  - (v0) stub analyzer (Demo mode, default) / OpenAI analyzer (opt-in)
-  - JSONL run logging
+FastAPI backend
+  - assigns request_id, measures latency
+  - Pydantic QuoteCheckResult contract
+  - runs ONE analyzer, selected by configuration (QUOTECHECK_USE_OPENAI):
+      deterministic Demo analyzer   (default)
+        OR
+      OpenAI Responses API          (opt-in)
+  - validates the result, attaches metadata, appends a JSONL trace
   |
   v
-logs/app_runs.jsonl  (append-only traces)
+Pydantic QuoteCheckResult  ->  logs/app_runs.jsonl (append-only)  ->  frontend report
 ```
+
+Analyzer mode is chosen once by configuration, not negotiated per request. An
+OpenAI-path failure returns an error to the caller; it does **not** silently switch
+to Demo output.
 
 Every `/analyze` call appends one JSON line to `logs/app_runs.jsonl` (request_id,
 prompt_version, model, latency_ms, schema_valid, risk_counts, uncertainty, error).
@@ -209,9 +226,37 @@ Inspect the latest entry:
 tail -n 1 logs/app_runs.jsonl | python3 -m json.tool
 ```
 
-Prompt artifacts live in `backend/core/prompt.py`; `PROMPT_VERSION` is included in
-both API responses and run logs so prompt changes are traceable as versioned product
-changes.
+Prompt artifacts live in `backend/core/prompt.py`; `PROMPT_VERSION`
+(`quotecheck_v0.3`) is included in both API responses and run logs so prompt changes
+are traceable as versioned product changes.
+
+### OpenAI mode
+
+When `QUOTECHECK_USE_OPENAI=1`, `/analyze` calls the **OpenAI Responses API** with
+**Structured Outputs**: a strict JSON Schema generated from the Pydantic
+`QuoteCheckResult` contract (`backend/core/schema_export.py`). The model response is
+then re-validated with Pydantic before it is returned. The default configured model
+is `gpt-4o-mini` (`QUOTECHECK_MODEL`). There is no multi-provider abstraction — this
+is an OpenAI-only path.
+
+### Demo mode
+
+The default (`QUOTECHECK_USE_OPENAI=0`) is a deterministic keyword-heuristic analyzer
+(`backend/core/stub_analyzer.py`). It makes no network or model calls, costs nothing,
+needs no OpenAI key or `backend/.env`, and always reports
+`metadata.model = "quotecheck-demo-analyzer"`. It exists for local and public
+reproducibility — anyone can clone the repo and get a real, schema-valid response
+without an API key or model call. It is heuristic, not model-intelligent: it
+recognizes a small fixed set of keywords per domain and is **not** equivalent to
+OpenAI-mode output.
+
+### Evaluation
+
+The repo ships six real, captured cross-domain Demo-mode example outputs
+(`examples/`), and any `/analyze` response can be validated against the
+`QuoteCheckResult` schema. Manual QA has been performed historically and recorded in
+the ticket/review bundles under `docs/`. There is **no automated eval or regression
+harness yet** — no scored semantic evaluation, no CI.
 
 ---
 
@@ -231,22 +276,24 @@ changes.
 
 ## Limitations
 
-- No production-readiness claims: no auth, no database, no persistence beyond the
-  local JSONL log, no SLAs, no hardening.
+- Not production-ready: no auth, no database, no persistence beyond the local JSONL
+  log, no SLAs, no hardening, no production-scale monitoring or load testing.
 - Paste-text input only — no PDF/OCR/image ingestion.
-- Price benchmarking is **not implemented**; any price-related field is not a market
-  price check.
-- No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
-  Reproducibility today relies on activating a compatible Python 3.10+ environment
-  yourself (`venv` or conda steps above); a fully pinned/reproducible environment file is
-  a future setup improvement, not something this repo guarantees yet.
-- No repair/retry when model output fails schema validation (planned).
-- No eval harness or automated test suite yet (`docs/CURRENT_STATE.md` has the full
-  gap list).
-- Current taxonomy/stub heuristics/prompt are vehicle-service-flavored, narrower than
-  the general service/repair/parts/vendor scope `SPEC.md` targets.
+- No market-price benchmarking, and no objective price-fairness judgment — QuoteCheck
+  describes only what the quote itself states.
+- No vendor verification: QuoteCheck does not check vendor claims against external
+  authoritative sources or assess vendor trustworthiness.
+- The deterministic Demo analyzer is a narrow keyword heuristic; its heuristics and
+  the shared `NormalizedCategory` taxonomy still carry vehicle-era wording. The
+  OpenAI-mode prompt itself is domain-generic.
+- No persistent user history or accounts.
+- No automated semantic eval / regression harness (`docs/CURRENT_STATE.md` has the
+  full gap list).
+- No repair/retry when model output fails schema validation.
+- No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`;
+  reproducibility relies on activating a compatible Python 3.10+ environment yourself.
 - QuoteCheck does not verify vendor claims, guarantee fair pricing, or replace a
-  certified professional's judgment.
+  qualified professional's judgment.
 
 For a full, neutral summary of what's public-ready vs. still limited, see
 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md). To run it yourself and confirm
@@ -257,7 +304,7 @@ captured sample reports, see [`examples/README.md`](examples/README.md).
 
 ## Design notes
 
-A few deliberate choices in this v0:
+A few deliberate choices in this early implementation:
 
 - **Schema-first API responses** (Pydantic) — the UI and any future analyzer are
   bound to the same validated shape, not to whatever a prompt happens to return.
@@ -317,12 +364,10 @@ logs/
 docs/
   tickets/    (one file per unit of work)
   review/     (review bundle per ticket, with real command output)
-  assets/     (real screenshots only — no placeholders; see LOCAL_DEMO.md)
+  assets/     (quotecheck-ui.png — committed UI screenshot)
   CURRENT_STATE.md    (factual snapshot of what exists right now)
   PROJECT_STATUS.md   (what's public-ready vs. still limited)
   LOCAL_DEMO.md       (local run guide: start backend/frontend, verify it works)
-
-eval/   (coming next)
 ```
 
 ---

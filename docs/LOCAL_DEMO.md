@@ -46,6 +46,7 @@ In a third terminal:
 
 ```bash
 cd frontend
+npm install
 npm run dev -- --host
 ```
 
@@ -72,16 +73,16 @@ Only do this if you intend to make a real, billed API call:
 5. Switch back to Demo mode (`QUOTECHECK_USE_OPENAI=0`) afterward to avoid further
    billed calls.
 
-## 8. Screenshot capture location
+## 8. Screenshot
 
-No screenshot is committed to this repo yet (`docs/assets/` intentionally has no
-image file — no placeholder or mocked-up image is used in its place). To add one:
+A real UI screenshot is committed at
+[`docs/assets/quotecheck-ui.png`](assets/quotecheck-ui.png) and embedded in README's
+[Screenshot](../README.md#screenshot) section. To refresh it:
 
 1. Complete steps 2–6 above.
 2. Capture the rendered report view in your browser.
-3. Save the image at `docs/assets/quotecheck-demo-ui.png`.
-4. README's Screenshot section can then embed it directly — see
-   [`README.md`](../README.md#screenshot).
+3. Overwrite `docs/assets/quotecheck-ui.png` with the new image (keep the same
+   filename so README's embed keeps working).
 
 For a full summary of what's ready vs. still limited, see
 [`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md).

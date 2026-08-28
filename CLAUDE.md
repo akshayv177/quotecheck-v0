@@ -1,8 +1,9 @@
 # CLAUDE.md — QuoteCheck
 
-QuoteCheck turns confusing service and parts quotes into clear explanations, red flags,
-vendor questions, and optional market price checks. This repo is an honest **v0 prototype**
-— do not describe it as production-ready.
+QuoteCheck turns confusing service, maintenance, repair, parts, and vendor quotes into
+clear explanations, red flags, vendor questions, and things to verify before approval.
+Market-price benchmarking and price-fairness judgment are **not** implemented. This
+repo is an early-stage implementation — do not describe it as production-ready.
 
 ## Read first
 

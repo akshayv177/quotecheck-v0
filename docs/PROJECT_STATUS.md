@@ -1,4 +1,4 @@
-# Project Status — QuoteCheck v0
+# Project Status — QuoteCheck
 
 A neutral, honest snapshot of what exists in this repo today: what's public-ready,
 what's still limited, and what should not be overclaimed. Written from direct
@@ -25,6 +25,8 @@ file is a summary, not a replacement for either.
   schema-validated.
 - **Real, captured example outputs.** All files under `examples/` are actual
   Demo-mode `/analyze` responses, not hand-written — see `examples/README.md`.
+- **UI screenshot committed.** `docs/assets/quotecheck-ui.png` is a real captured
+  screenshot of the rendered report, embedded in `README.md`.
 - **Observability from day one.** Every request appends one JSONL record to
   `logs/app_runs.jsonl` (request_id, prompt version, model, latency, schema validity,
   risk counts, uncertainty, error).
@@ -40,10 +42,11 @@ file is a summary, not a replacement for either.
 
 ## What's still limited
 
-- **Narrow taxonomy.** Demo mode's stub and the OpenAI-mode prompt are still
-  vehicle-service-flavored (brakes/tyres) with AC/appliance and home-maintenance
-  keyword coverage added on top — not the general service/repair/parts/vendor scope
-  `SPEC.md` targets.
+- **Narrow taxonomy and Demo heuristics.** The deterministic Demo stub and the
+  shared `NormalizedCategory` taxonomy still carry vehicle-era wording (brakes/tyres),
+  with AC/appliance and home-maintenance keyword coverage added on top — not the
+  general service/repair/parts/vendor scope `SPEC.md` targets. The OpenAI-mode prompt
+  itself was made domain-generic in TASK-012.
 - **Demo mode is keyword matching, not language understanding.** It recognizes a
   small fixed set of keywords per domain and falls back to a single "needs
   clarification" item otherwise. It is a stand-in for realistic responses, not an
@@ -60,21 +63,34 @@ file is a summary, not a replacement for either.
   manually curated sample set, not scored evaluation.
 - **No repair/retry on schema-validation failure** if a model output doesn't match
   the contract.
-- **No screenshot committed yet.** See `docs/LOCAL_DEMO.md` for how to add one —
-  this repo does not use placeholder or mocked-up images.
+- **No market-price benchmarking and no objective price-fairness judgment.**
+  QuoteCheck describes only what the quote states.
+- **No vendor verification.** Vendor claims are not checked against external
+  authoritative sources; vendor trustworthiness is not assessed.
+- **No verified public deployment.**
 
 ## What should not be overclaimed
 
 - This is **not** a production-ready system: no SLAs, no hardening, no scale
   guarantees, no uptime commitments.
 - QuoteCheck does **not** provide professional or safety advice, and does not
-  replace a certified mechanic, contractor, or other professional's judgment.
+  replace a qualified professional's judgment (mechanic, contractor, technician, etc.).
 - QuoteCheck does **not** verify vendor claims or guarantee fair pricing.
 - OpenAI-mode output has not been benchmarked for accuracy; using a stronger model
   does not itself constitute a validated claim of correctness.
 - Demo mode's keyword matches should never be described as "AI analysis" in the
   literal sense — it's a deterministic stub used specifically so a visitor can try
   the product without cost or credentials.
+
+## Planned hardening (not yet built)
+
+Tracked as future work; none of this is implemented today:
+
+- Automated eval / regression harness with scored semantic checks.
+- Bounded repair/retry when a model response fails schema validation.
+- Broader, de-vehicled result taxonomy.
+- Production-scale monitoring and load testing.
+- A verified public deployment.
 
 For the exact current architecture, commands, and full gap list, see
 [`docs/CURRENT_STATE.md`](CURRENT_STATE.md).
