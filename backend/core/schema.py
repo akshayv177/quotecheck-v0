@@ -130,8 +130,24 @@ class UncertaintyMarkers(BaseModel):
     - logging and monitoring
     """
     ambiguous_items_present: bool
-    missing_vehicle_context: bool
-    needs_mechanic_confirmation: bool
+    missing_quote_context: bool = Field(
+        ...,
+        description=(
+            "True when the quote omits contextual information needed to interpret "
+            "one or more recommendations confidently, such as scope, symptoms, "
+            "quantities, diagnostic basis, or other material details. This is not a "
+            "synonym for 'the quote contains a vague line item.'"
+        ),
+    )
+    needs_professional_confirmation: bool = Field(
+        ...,
+        description=(
+            "True when one or more technical or safety-sensitive recommendations "
+            "should be confirmed by an appropriate qualified professional (for the "
+            "relevant trade or domain) before relying on this analysis. "
+            "Domain-neutral."
+        ),
+    )
 
 
 class RefusalType(str, Enum):
@@ -190,8 +206,8 @@ class QuoteCheckResult(BaseModel):
     uncertainty_markers: UncertaintyMarkers = Field(
         default_factory=lambda: UncertaintyMarkers(
             ambiguous_items_present=True,
-            missing_vehicle_context=True,
-            needs_mechanic_confirmation=True,
+            missing_quote_context=True,
+            needs_professional_confirmation=True,
         )
     )
     refusals: List[Refusal] = Field(default_factory=list)

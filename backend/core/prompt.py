@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-PROMPT_VERSION = "quotecheck_v0.3"
+PROMPT_VERSION = "quotecheck_v0.4"
 
 # Keep these concise to control cost. Avoid long explanations; prefer structured outputs
 SYSTEM_PROMPT = r"""You are QuoteCheck, a service quote understanding and review assistant for repair, maintenance, parts, and vendor quotes across any domain (vehicle, appliance/HVAC, home/contractor work, or other paid services) — not vehicle-only.
@@ -30,7 +30,8 @@ Set `vague_or_confusing=true` on any line_item that is generically named, bundle
 Keep rationale_short to 1-2 sentences.
 Use the v0 taxonomy and enums exactly.
 For any line_item with risk_level="red", include 2–4 evidence_needed entries (measurements/photos/codes) that the user can request.
-Set missing_vehicle_context=true only when the quote is clearly about a vehicle (car, bike, etc.) and vehicle context (make/model/year/mileage) is actually missing from it — ask for that context in verification_questions in that case. For any quote that is not clearly vehicle-related (e.g. appliance/HVAC, home/contractor, other services), set missing_vehicle_context=false; do not default it to true.
+Set missing_quote_context=true only when the quote omits contextual information needed to interpret one or more recommendations confidently — for example missing scope, symptoms, the affected component, quantities, measurements, or the diagnostic basis for a recommendation. Do not set it true merely because a single line item is generically named; use vague_or_confusing for that. When missing_quote_context=true, ask for the specific missing context in verification_questions.
+Set needs_professional_confirmation=true when one or more technical or safety-sensitive recommendations should be checked by an appropriately qualified professional for the relevant trade or domain before the user relies on this analysis; otherwise set it false. Do not assume a specific trade (e.g. mechanic) — use wording appropriate to what the quote is about.
 Do not leave evidence_needed empty for red items unless the quote already includes clear measurements/photos.
 Default additives/flushes/coatings to cosmetic_or_upsell unless strong evidence is present.
 verification_questions must be concrete, vendor-facing questions the user can send back before approving.
@@ -39,7 +40,7 @@ Do not claim any price benchmarking, market comparison, or "fair price" verifica
 Always include a disclaimer along these lines: "This analysis is informational and should not replace professional advice, official estimates, warranty terms, or a second opinion for high-value or safety-critical work." Only name a specific professional (e.g. "certified mechanic") when the quote is clearly vehicle-related; otherwise use generic wording such as "a qualified professional."
 """
 
-def build_messages(*, quote_text: str, schema_json: str) -> List[Dict[str, str]]:
+def build_messages(*, quote_text: str) -> List[Dict[str, str]]:
     """
     Build the message payload for the model.
 
@@ -47,13 +48,18 @@ def build_messages(*, quote_text: str, schema_json: str) -> List[Dict[str, str]]
     ----------
     quote_text: str
         Raw quote text pasted by the user.
-    schema_json: str
-        JSON schema string (or compact representation) describing the required output.
 
     Returns
     -------
     list[dict]
         A list of {role, content} messages suitable for chat-style APIs.
+
+    Note
+    ----
+    The required output shape is enforced via the OpenAI Responses API strict
+    Structured Outputs schema (``text.format.schema``, built from the Pydantic
+    ``QuoteCheckResult`` contract in ``openai_analyzer.py``), not by embedding a
+    schema string in these messages.
     """
 
     user_content = (

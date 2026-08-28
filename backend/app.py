@@ -62,7 +62,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core.schema import AnalyzeRequest, QuoteCheckResult
 from backend.core.run_logger import log_app_run
 from backend.core.prompt import PROMPT_VERSION
-from backend.core.config import APP_RUN_LOG_PATH, USE_OPENAI, MODEL
+from backend.core.config import APP_RUN_LOG_PATH, USE_OPENAI, MODEL, DEMO_ANALYZER_MODEL
 from backend.core.openai_analyzer import analyze_quote_openai
 from backend.core.stub_analyzer import analyze_quote_stub
 
@@ -143,11 +143,14 @@ def analyze(req: AnalyzeRequest):
 
     except Exception as e:
         latency_ms = int((time.perf_counter() - t0) * 1000)
+        # Provenance must stay mode-accurate on the failure path: a Demo-mode
+        # failure never called OpenAI, so it must not log an OpenAI model id.
+        failure_model = MODEL if USE_OPENAI else DEMO_ANALYZER_MODEL
         log_app_run(
             log_path=APP_RUN_LOG_PATH,
             request_id=request_id,
             prompt_version=PROMPT_VERSION,
-            model=MODEL,
+            model=failure_model,
             latency_ms=latency_ms,
             schema_valid=False,
             num_items=0,

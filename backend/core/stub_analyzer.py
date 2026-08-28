@@ -4,9 +4,13 @@ Stub Analyzer (v0)
 Provides a deterministic, zero-cost analyzer used when QUOTECHECK_USE_OPENAI=0.
 
 Why keep a stub?
-- Lets the UI/demo work without spending money
-- Provides a deterministic fallback if OpenAI is unavailable
+- Lets the UI/demo, local development, and eval runs work with no API key and no
+  OpenAI spend
 - Acts as a baseline for future eval comparisons
+
+The analyzer is selected once by configuration (QUOTECHECK_USE_OPENAI). This is
+not an automatic fallback: an OpenAI-mode failure returns an error to the caller,
+it does not silently switch to this stub.
 
 This module returns a fully schema-valid QuoteCheckResult.
 """
@@ -55,6 +59,29 @@ GENERIC_CHARGE_TERMS = [
     "consumables",
     "other charges",
     "unitemized charges",
+]
+
+# Explicit phrases that indicate the quote itself defers, omits, externalises, or
+# only approximates material context (scope / parts / measurements / diagnostic
+# basis / itemisation). Fixed substrings, matched case-insensitively — the same
+# transparent keyword technique used by the lists above, not language understanding.
+# Used only to set uncertainty_markers.missing_quote_context deterministically.
+MISSING_CONTEXT_PHRASES = [
+    "no specific",
+    "not included",
+    "no measurements",
+    "no parts",
+    "follow-up estimate",
+    "to be determined",
+    "tbd",
+    "approximate total",
+    "as agreed",
+    "as discussed",
+    "discussed during",
+    "attached estimate",
+    "see attached",
+    "depending on additional work",
+    "additional work found",
 ]
 
 
@@ -342,6 +369,28 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         generic_charge_matched=generic_charge_matched,
     )
 
+    # Deterministic uncertainty markers (no hardcoded vehicle/mechanic values).
+    #
+    # missing_quote_context: only when there is evidence in the quote that
+    # material context is actually absent — an explicit missing/deferred-context
+    # phrase, or a quote that resolves to nothing but generic/bundled charges with
+    # no substantive service item. Not set merely because a domain was not
+    # recognised, and not a mirror of the vague-charge flag alone.
+    explicit_missing_context = any(term in text_lower for term in MISSING_CONTEXT_PHRASES)
+    only_generic_charges = generic_charge_matched and not (
+        vehicle_matched or ac_matched or home_matched
+    )
+    missing_quote_context = explicit_missing_context or only_generic_charges
+
+    # needs_professional_confirmation: domain-neutral — true when the deterministic
+    # risk logic above flagged genuinely safety-sensitive work (red risk or a
+    # safety_critical category), regardless of trade.
+    needs_professional_confirmation = any(
+        it.risk_level == RiskLevel.red
+        or it.normalized_category == NormalizedCategory.safety_critical
+        for it in items
+    )
+
     return QuoteCheckResult(
         line_items=items,
         overall_summary=overall_summary,
@@ -349,8 +398,8 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         things_to_verify=things_to_verify,
         uncertainty_markers=UncertaintyMarkers(
             ambiguous_items_present=True,
-            missing_vehicle_context=True,
-            needs_mechanic_confirmation=True,
+            missing_quote_context=missing_quote_context,
+            needs_professional_confirmation=needs_professional_confirmation,
         ),
         refusals=[],
         disclaimer=(
