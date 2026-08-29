@@ -255,15 +255,28 @@ OpenAI-mode output.
 The repo ships six real, captured cross-domain Demo-mode example outputs
 (`examples/`), and any `/analyze` response can be validated against the
 `QuoteCheckResult` schema. Manual QA has been performed historically and recorded in
-the ticket/review bundles under `docs/`. There is **no automated eval or regression
-harness yet** — no scored semantic evaluation, no CI.
+the ticket/review bundles under `docs/`.
 
-An evaluation *specification* and a 27-case synthetic quote corpus now exist under
-[`eval/`](eval/README.md): a deliberate split between deterministic invariants a runner
-can check honestly and semantic qualities that need human judgment, a 0/1/2 review
-rubric, and two permanent regression cases (domain leakage, and unsupported price
-judgment). **Nothing in `eval/` executes yet** — the runner and any scored results are
-the next piece of work, and no claim is made here about how well QuoteCheck performs.
+[`eval/`](eval/README.md) holds a 27-case synthetic quote corpus and a deterministic
+**regression runner** (`python -m eval.run_eval`). The design is a deliberate split:
+Layer A — invariants a runner can check honestly (schema validity, metadata
+provenance, uncertainty-marker values, forbidden-term leakage, structured line-item
+counts) — plus Layer B, the semantic qualities (faithfulness, unsupported inference,
+usefulness, calibration) that stay on a human 0/1/2 rubric. Two permanent regression
+cases guard domain leakage and unsupported price judgment.
+
+- Demo mode runs the whole suite at **zero API cost**: `python -m eval.run_eval --mode demo`.
+- OpenAI mode requires an explicit `--allow-paid` flag; without it the runner exits
+  before any billed inference.
+- The runner does **not** score semantics and does **not** measure model accuracy,
+  hallucination rate, or production readiness. A Layer A pass rate is not a quality
+  number. There is no CI wiring yet.
+- Latest committed Demo-mode baseline
+  ([`eval/results/summary_20260829T105921Z.md`](eval/results/summary_20260829T105921Z.md)):
+  27/27 schema-valid; 11/27 deterministic cases pass. The 16 failures are known,
+  already-documented Demo-mode gaps (e.g. `ambiguous_items_present` is hardcoded
+  `true` in the stub) and are retained rather than excluded.
+- Harness self-tests: `python -m unittest discover -s eval/tests -p 'test_*.py' -v`.
 
 ---
 
@@ -294,8 +307,8 @@ the next piece of work, and no claim is made here about how well QuoteCheck perf
   the shared `NormalizedCategory` taxonomy still carry vehicle-era wording. The
   OpenAI-mode prompt itself is domain-generic.
 - No persistent user history or accounts.
-- No automated semantic eval / regression harness (`docs/CURRENT_STATE.md` has the
-  full gap list).
+- A deterministic eval / regression runner exists (`eval/`), but semantic grading is
+  still manual and there is no CI (`docs/CURRENT_STATE.md` has the full gap list).
 - No repair/retry when model output fails schema validation.
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`;
   reproducibility relies on activating a compatible Python 3.10+ environment yourself.
@@ -366,10 +379,15 @@ examples/
     vague_missing_details.json
 
 eval/
-  README.md           (evaluation specification: deterministic vs. semantic)
+  README.md           (evaluation specification + runner usage: deterministic vs. semantic)
   rubric.md           (human 0/1/2 semantic review rubric)
   termsets.json       (shared forbidden-term sets)
   cases/              (27 synthetic quote cases, one JSON file each)
+  corpus.py           (permanent corpus loading + validation)
+  graders.py          (deterministic Layer A graders)
+  run_eval.py         (CLI runner: python -m eval.run_eval)
+  tests/              (stdlib unittest self-tests for the harness)
+  results/            (timestamped run_*.jsonl + summary_*.md artifacts)
 
 logs/
   app_runs.jsonl
@@ -388,8 +406,8 @@ docs/
 ## Roadmap
 
 1. Add bounded repair retry (if model output fails Pydantic validation)
-2. Eval harness: execute the `eval/` corpus against `/analyze` -> JSONL results +
-   per-mode summary (the specification and 27-case corpus exist; the runner does not)
+2. Eval: semantic Layer B review pass against `eval/rubric.md`; CI wiring for the
+   deterministic runner (the runner and its Demo baseline exist)
 3. Cost controls: output token caps, shorter rationales, caching hooks, batch eval runs
 4. Product wedge: expanded taxonomy + evidence requirements + HITL workflows
 

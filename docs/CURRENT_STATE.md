@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-28 (QC-3A)
+Last updated: 2026-08-29 (QC-3B)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -114,6 +114,19 @@ Logs:
 tail -n 1 logs/app_runs.jsonl | python3 -m json.tool
 ```
 
+Eval (deterministic Layer A runner, QC-3B; from repo root, `backend/requirements.txt`
+installed):
+
+```bash
+python -m eval.run_eval --validate-only        # corpus validation only, no analyzer
+python -m eval.run_eval --mode demo            # zero-cost deterministic run
+python -m eval.run_eval --mode openai --allow-paid   # billed; explicit opt-in only
+python -m unittest discover -s eval/tests -p 'test_*.py' -v
+```
+
+`--mode demo` exits non-zero today: the corpus targets the product contract, not the
+Demo stub, so known gaps surface as real failures (see *Added in QC-3B*).
+
 Modes: no `backend/.env` file is required to run in Demo mode — it's the default
 with zero setup. To switch modes explicitly, copy `backend/.env.example` to
 `backend/.env`; `QUOTECHECK_USE_OPENAI=0` (default) = Demo mode (stub analyzer,
@@ -176,9 +189,9 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
   Reproducibility depends on the developer activating a compatible Python 3.10+
   environment themselves (README documents a conda-based path).
-- No backend tests, no automated eval / regression harness, no CI. An evaluation
-  *specification* and case corpus now exist under `eval/` (QC-3A), but nothing executes
-  them — there is no runner and no scoring.
+- No backend tests and no CI. A deterministic eval/regression runner exists
+  (`eval/`, QC-3B) and has stdlib self-tests, but semantic grading remains manual,
+  and the application-level Demo gaps its baseline reveals are unresolved.
 - No verified public deployment.
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
@@ -197,6 +210,55 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-3B
+
+An **executable deterministic eval / regression runner** for the QC-3A corpus. It is
+Layer A only — it measures nothing semantic. **No `backend/`, `frontend/`, or
+`examples/` code changed; no corpus expectation changed; no dependencies added.**
+
+What now exists:
+
+- `python -m eval.run_eval` — loads and **permanently validates** the 27-case corpus
+  (parse, unique `case_id`, closed domain/category enums, exact deterministic-check
+  shapes, termset resolution, single-source termset mode, no duplicate quote text,
+  REG-001/REG-002 exactly once, corpus size 24–30, and the QC-3A category →
+  expectation consistency rules), then runs each selected case through the real route
+  handler `backend.app.analyze` and grades it.
+- **Zero-cost Demo mode** (`--mode demo`, the default): no OpenAI calls.
+- **Explicit paid boundary**: `--mode openai` exits before any billed inference unless
+  `--allow-paid` is passed; then it prints the case count, model, and a billing
+  warning first.
+- **Deterministic graders** for exactly the vocabulary the corpus uses: `schema_valid`
+  (independent Pydantic re-validation), `metadata_complete` (provenance + completeness,
+  one result per sub-assertion, `prompt_version` compared to `backend.core.prompt`
+  rather than hardcoded), `forbidden_terms` (shared termsets only; `absolute` and
+  `not_in_source` modes; case-insensitive whole-word/phrase matching over the
+  `analysis_text` field group, `name_raw` excluded), `uncertainty_marker`, and
+  `line_items_where` (`vague_or_confusing` / `evidence_needed_nonempty`, `min_count`).
+  Every assertion emits an interpretable `CheckResult` with expected / observed /
+  message.
+- **Artifacts**: timestamped `eval/results/run_<UTC>.jsonl` (one record per case) and
+  `eval/results/summary_<UTC>.md` (rates, failures by domain and category, per-failed-
+  case reasons, explicit REG-001/REG-002 status, latency, human-review boundary,
+  fixed interpretation-boundary note). One failing case never aborts the suite; a
+  malformed corpus aborts before any analyzer call.
+- **Exit semantics**: `0` only if every selected case passes deterministic evaluation;
+  non-zero otherwise, with artifacts written first. No `--ignore-failures`, no xfail.
+- **First committed Demo baseline**: `eval/results/summary_20260829T105921Z.md` —
+  27/27 schema-valid; 11/27 deterministic cases pass. The 16 failures are the
+  already-documented Demo-mode gaps above (e.g. `ambiguous_items_present` hardcoded
+  `true`); they are retained, not excluded.
+- **Automated tests for the grader machinery**: `python -m unittest discover -s
+  eval/tests -p 'test_*.py' -v` (stdlib `unittest`, no test dependency added).
+
+What does **not** exist:
+
+- No semantic (Layer B) auto-scoring — `semantic_expectations` are never machine-checked;
+  the rubric in `eval/rubric.md` is still a manual pass.
+- No CI wiring.
+- No new model-quality, accuracy, hallucination, or production-readiness claim. A
+  Layer A pass rate is not a quality number.
 
 ### Added in QC-3A
 

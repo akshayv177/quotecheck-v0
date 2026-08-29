@@ -1,11 +1,13 @@
 # QuoteCheck evaluation specification
 
-**Status: specification and corpus only. There is no executable eval runner, no
-automated scoring, and no CI in this repo today.** This directory defines *what*
-QuoteCheck should be evaluated on and *which* inputs to evaluate it against. QC-3B will
-implement the runner against this specification.
+**Status: specification, corpus, and a deterministic (Layer A) runner.** This
+directory defines *what* QuoteCheck is evaluated on and *which* inputs to evaluate it
+against, and ships an executable runner for the mechanically checkable invariants
+(QC-3B). Semantic judgment (Layer B) stays human, scored against
+[`rubric.md`](rubric.md). See [*Running the suite*](#running-the-suite-qc-3b) below.
 
-Nothing here makes a claim about how well QuoteCheck currently performs.
+Nothing here makes a claim about how well QuoteCheck currently performs. A Layer A
+pass rate is not an accuracy, quality, or correctness number.
 
 ---
 
@@ -110,8 +112,10 @@ The corpus also does not restate the `QuoteCheckResult` schema. That contract li
 
 ## Deterministic expectation vocabulary
 
-Six check types, deliberately small. `must` holds positive assertions; `must_not` holds
-`forbidden_terms` entries.
+Five check types, deliberately small — exactly what the 27 cases use and the runner
+implements. `must` holds positive assertions; `must_not` holds `forbidden_terms`
+entries. An unknown check name, an unknown parameter, or any shape beyond what is
+described here is a hard corpus-validation error before any analyzer runs.
 
 ### Global invariants
 
@@ -128,23 +132,24 @@ deliberate: the price regression case should be readable standalone.
 
 ### Case-level checks
 
-**`forbidden_terms`** — a term must not appear in the output.
+**`forbidden_terms`** — a term must not appear in analysis-authored output.
 
-- `termset`: a name resolved from [`termsets.json`](termsets.json), or
-- `terms`: an inline case-specific list.
-- `mode` — **for shared termsets, the mode lives in `termsets.json` and only there.** A
-  case referencing a termset must not restate `mode`, and QC-3B must not implement
-  per-case termset-mode overrides. Only inline `terms` may carry their own `mode`.
+- A case entry is exactly `{ "check": "forbidden_terms", "termset": "<name>" }` and
+  carries nothing else. `<name>` resolves to a shared set in
+  [`termsets.json`](termsets.json). Inline `terms`, a per-case `mode`, and a per-case
+  `fields` are **not** supported — a case using any of them fails corpus validation.
+- `mode` lives in `termsets.json` and only there.
   - `absolute` — the phrase must never appear in analysis-authored text, whatever the
     quote says. QuoteCheck must not assert a market judgment even if the vendor did.
   - `not_in_source` — the term fails only if it appears in the output **and** does not
-    appear in `quote_text`. If the customer's own quote says "mechanic", the word is not
-    forbidden; inventing it is.
-- `fields` — `analysis_text` (default: `explanation`, `rationale_short`,
-  `evidence_needed`, `overall_summary`, `verification_questions`, `things_to_verify`,
-  `disclaimer`) or `all_text` (adds `name_raw`). `name_raw` is excluded by default
-  because the schema defines it as text copied from the quote, so a term appearing there
-  is quotation, not invention.
+    appear in `quote_text`. If the customer's own quote says "mechanic", the word is
+    not forbidden; inventing it is. This is a deterministic proxy for invented domain
+    terminology, not proof of semantic hallucination.
+- Analysis-authored text is the `analysis_text` field group: `explanation`,
+  `rationale_short`, `evidence_needed`, `overall_summary`, `verification_questions`,
+  `things_to_verify`, `disclaimer`. `name_raw` is **never** scanned — the schema
+  defines it as text copied from the quote, so a term appearing there is quotation,
+  not invention.
 - Matching is **case-insensitive whole-word / whole-phrase, never substring** — so "tire"
   does not match "entire", and "fair price" does not match "guarantee fair pricing".
 
@@ -152,11 +157,10 @@ deliberate: the price regression case should be readable standalone.
 `missing_quote_context`, `needs_professional_confirmation`) and `expected` (bool). A
 direct boolean read of the contract in `backend/core/schema.py`.
 
-**`line_items_where`** — `property` (`vague_or_confusing`, `evidence_needed_nonempty`, or
-`risk_level`), `value`, and `min_count` / `max_count`. Covers "ambiguity was surfaced" and
-"evidence was requested" with one check.
-
-**`topic_present`** — `any_of` (terms/synonyms) and `in` (field group). Used sparingly.
+**`line_items_where`** — `property` (`vague_or_confusing` or `evidence_needed_nonempty`),
+`value` (bool), and `min_count`. Counts line items matching the predicate; passes when
+the count is at least `min_count`. Covers "ambiguity was surfaced" and "evidence was
+requested".
 
 ### How strong is each check, honestly
 
@@ -168,7 +172,6 @@ direct boolean read of the contract in `backend/core/schema.py`.
 | `line_items_where` | Robust for counting. It proves an evidence request exists, never that it is a useful one. |
 | `forbidden_terms`, `absolute` | High precision, low recall by design. A hit is strong evidence of a real defect; a pass is not evidence of absence. |
 | `forbidden_terms`, `not_in_source` | A **proxy**. It shows a domain word appeared in output and not in the quote. Whether a legitimately *sourced* domain word was used faithfully is Layer B. |
-| `topic_present` | Weakest. Proves a word appears. Proves nothing about whether the question is worth asking. |
 
 ### Why the price termset is small
 
@@ -312,17 +315,91 @@ broken cases. They are deliberately left in.
 
 Consequently:
 
-- QC-3B must report results **per mode**, never blended;
-- known Demo-mode failures must **not** be xfailed, suppressed, or excluded from pass-rate
+- the runner reports results **per mode**, never blended (one invocation is one mode);
+- known Demo-mode failures are **not** xfailed, suppressed, or excluded from pass-rate
   denominators — a suite that hides its red rows is decoration;
-- the corpus must not be tuned down to whatever the stub already does.
+- the corpus is not tuned down to whatever the stub already does.
+
+---
+
+## Running the suite (QC-3B)
+
+The runner is `python -m eval.run_eval`. It loads and permanently validates the
+corpus, runs each selected case through the real QuoteCheck route handler
+(`backend.app.analyze`), applies **only** the deterministic checks above, writes a
+timestamped JSONL + Markdown pair under `results/`, and exits non-zero if any
+selected case fails.
+
+### Commands
+
+```bash
+python -m eval.run_eval --validate-only        # corpus validation only, no analyzer
+python -m eval.run_eval --mode demo            # zero-cost deterministic run (default)
+python -m eval.run_eval --mode demo --case-id REG-001 --case-id REG-002
+python -m eval.run_eval --mode openai --allow-paid    # billed; explicit opt-in
+
+python -m unittest discover -s eval/tests -p 'test_*.py' -v   # harness self-tests
+```
+
+### CLI options
+
+| option | effect |
+|---|---|
+| `--mode {demo,openai}` | analyzer mode; `demo` (default) is deterministic and free |
+| `--allow-paid` | required with `--mode openai`; without it the runner exits before any billed inference |
+| `--case-id ID` | restrict to a case id (repeatable) — cheap regression reruns |
+| `--domain D` / `--category C` | restrict to a domain / category (repeatable) |
+| `--validate-only` | validate the corpus and exit; no analyzer calls |
+| `--results-dir PATH` | where artifacts are written (default `eval/results`) |
+
+### Artifacts
+
+Each run writes, under `results/` and never overwriting (`<UTC>` is `YYYYMMDDTHHMMSSZ`):
+
+- `run_<UTC>.jsonl` — one JSON record per case: `case_id`, `domain`, `categories`,
+  `mode`, `prompt_version`, `model`, `schema_pass`, `deterministic_pass`,
+  `failed_checks`, `check_results` (every assertion, with expected / observed /
+  message), `latency_ms`, `execution_error`, `human_review_status` (always
+  `not_reviewed`).
+- `summary_<UTC>.md` — run metadata, overall rates, failures by domain and by
+  category, every failed case with reasons, explicit REG-001 / REG-002 status,
+  latency, the human-review boundary, and a fixed interpretation-boundary note.
+
+### Exit semantics
+
+`0` only if every selected case passes deterministic evaluation; non-zero otherwise.
+Both artifacts are always written completely before a non-zero exit. There is no
+`--ignore-failures` and no xfail mechanism.
+
+### OpenAI cost guard
+
+`--mode openai` without `--allow-paid` exits before the application / analyzer
+execution path runs — no `analyze` call, no OpenAI client, no model request, no
+billable inference. With `--allow-paid` the runner first prints the selected-case
+count, the configured model, and a warning that billed calls will occur.
+
+### Layer A is not Layer B
+
+The runner establishes schema validity, metadata provenance, explicit
+uncertainty-marker values, deterministic forbidden-term violations, and structured
+line-item counts. It establishes **nothing** about faithfulness, hallucination,
+explanation quality, usefulness, or semantic uncertainty calibration — those remain
+the human responsibility defined in [`rubric.md`](rubric.md).
+
+### Latest committed Demo baseline
+
+[`results/summary_20260829T105921Z.md`](results/summary_20260829T105921Z.md) —
+27/27 schema-valid; 11/27 deterministic cases pass. The 16 failures are real,
+already-documented Demo-mode product gaps (most visibly `ambiguous_items_present`,
+hardcoded `true` in the stub); they are retained, not excluded.
 
 ---
 
 ## Non-goals (current)
 
-- No executable runner, scoring code, or CI. QC-3B owns those.
-- No `results/` artifacts. QC-3B owns those.
+- No semantic auto-scoring. The runner is Layer A only; `semantic_expectations` are
+  never machine-checked.
+- No CI wiring yet.
 - No price-benchmarking evaluation — there is nothing to evaluate; benchmarking is not
   implemented anywhere in QuoteCheck.
 - No vendor-trust or claim-verification evaluation, for the same reason.
@@ -335,16 +412,16 @@ Consequently:
 
 ## Relationship to QC-3B
 
-| QC-3A (this ticket) | QC-3B (next) |
+| QC-3A | QC-3B (the runner) |
 |---|---|
 | Defines the case schema and the check vocabulary | Implements the checks |
-| Writes the 27-case corpus | Runs the corpus against `/analyze` |
+| Writes the 27-case corpus | Runs the corpus through `backend.app.analyze` |
 | Defines the human rubric | Produces per-mode reports and `results/` artifacts |
-| States which checks are proxies | Must carry that framing into its output |
+| States which checks are proxies | Carries that framing into its output |
 
-QC-3B must not widen the deterministic vocabulary to make a case pass, must not
-re-interpret a `semantic_expectations` field as machine-checkable, and must not report a
-Layer A pass rate as a quality score.
+The runner does not widen the deterministic vocabulary to make a case pass, does not
+re-interpret a `semantic_expectations` field as machine-checkable, and does not report
+a Layer A pass rate as a quality score.
 
 ---
 
