@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-29 (QC-3C)
+Last updated: 2026-08-29 (QC-4)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -12,7 +12,11 @@ FastAPI backend, which returns a schema-valid `QuoteCheckResult` and appends one
 JSONL log record per request.
 
 - `backend/app.py` — FastAPI app; `GET /health`, `POST /analyze`; CORS for the Vite
-  dev server; per-request logging (success and failure paths).
+  dev server; per-request logging (success and failure paths, guarded so a logging
+  failure never masks the analysis outcome). A `QuoteCheckError` exception handler
+  renders classified OpenAI-mode failures as `{"detail": {code, message, retryable,
+  request_id}}` with the mapped HTTP status; an unclassified exception is wrapped as
+  `internal_error` (500).
 - `backend/core/schema.py` — Pydantic contract (`AnalyzeRequest`, `QuoteCheckResult`
   and nested models: line items, risk levels, uncertainty markers, refusals, metadata).
 - `backend/core/stub_analyzer.py` — deterministic keyword-heuristic analyzer
@@ -25,10 +29,22 @@ JSONL log record per request.
   demo-mode responses and JSONL logs never claim an OpenAI model was called.
 - `backend/core/openai_analyzer.py` — OpenAI Responses API with strict Structured
   Outputs (JSON Schema generated from the Pydantic `QuoteCheckResult` contract via
-  `schema_export.py`), then final Pydantic validation of the response; server
-  overrides metadata. Default model `gpt-4o-mini` (`QUOTECHECK_MODEL`). An
-  OpenAI-path failure returns an error to the caller; it does not fall back to Demo
-  output.
+  `schema_export.py`), then mandatory final Pydantic validation of the response;
+  server overrides metadata. Default model `gpt-4o-mini` (`QUOTECHECK_MODEL`).
+  QC-4: the SDK client is built with an explicit bounded `timeout`
+  (`QUOTECHECK_OPENAI_TIMEOUT_SECONDS`, default 30s) and `max_retries=0`; a small
+  no-backoff loop here retries **once**, only for transient connection / timeout /
+  provider-5xx failures (max 2 provider calls per request). Response state is
+  inspected explicitly — refusal, incomplete/failed, empty structured content, and
+  schema-invalid output are each classified, never parsed blindly. Every failure is
+  raised as a single `QuoteCheckError` (`backend/core/errors.py`); a raw SDK
+  exception never escapes the module. There is no repair loop and no fallback to
+  Demo output. Returns `(result, latency_ms, provider_attempts)`.
+- `backend/core/errors.py` — the QC-4 reliability model: `FailureCategory` (8
+  values), a category→(http_status, retryable, user_message) spec table, the
+  `QuoteCheckError` exception (carries `cause` for tests but only ever logs
+  `cause_type`), `classify_openai_exception`, `is_transient_openai_exception`, and
+  `error_response_body`. One module, no hierarchy.
 - `backend/core/prompt.py` — versioned prompt artifacts (`PROMPT_VERSION = quotecheck_v0.4`),
   explanation-first: every line item must carry a plain-English `explanation` before
   risk judgment, and vague/bundled charges must be flagged via `vague_or_confusing`.
@@ -43,11 +59,21 @@ JSONL log record per request.
   explicitly told not to characterize a quote/charge as high/low/fair/cheap/
   expensive/overpriced/underpriced without benchmarking data.
 - `backend/core/config.py` — env-var config: `QUOTECHECK_USE_OPENAI`, `QUOTECHECK_MODEL`
-  (default `gpt-4o-mini`), `QUOTECHECK_LOG_PATH`, `OPENAI_API_KEY`, and
-  `DEMO_ANALYZER_MODEL` (fixed label, not env-configurable). Loaded from untracked
-  `backend/.env` (template: `backend/.env.example`); if `backend/.env` doesn't exist
-  at all, the app still runs — defaults are `QUOTECHECK_USE_OPENAI=0` (Demo mode).
+  (default `gpt-4o-mini`), `QUOTECHECK_LOG_PATH`, `OPENAI_API_KEY`,
+  `QUOTECHECK_OPENAI_TIMEOUT_SECONDS` (default 30s; validated lazily — a malformed
+  value surfaces as `configuration_error`, not an opaque httpx failure), and fixed
+  code constants `DEMO_ANALYZER_MODEL`, `OPENAI_MAX_RETRIES = 1`,
+  `OPENAI_MAX_ATTEMPTS = 2` (retry count is deliberately not env-overridable — it
+  affects cost and request amplification). Loaded from untracked `backend/.env`
+  (template: `backend/.env.example`); if `backend/.env` doesn't exist at all, the
+  app still runs — defaults are `QUOTECHECK_USE_OPENAI=0` (Demo mode).
 - `backend/core/run_logger.py` / `logs/app_runs.jsonl` — append-only JSONL run logs.
+  QC-4 adds sanitized fields: `analyzer` (`openai`/`demo`), `success`,
+  `failure_category`, `retryable`, `cause_type` (exception class name only),
+  `provider_status`, `provider_request_id`, `response_status`, `incomplete_reason`,
+  `provider_attempts` (the actual number of provider calls made). `error` is a
+  short application-authored string — never a raw exception dump, traceback, request
+  body, or API key.
 - `backend/core/schema_export.py` — JSON Schema export used by the OpenAI analyzer.
 - `frontend/src/App.jsx` — entire UI: textarea → Analyze → quote-understanding
   report (report header with a derived risk-count strip, summary card, then one
@@ -61,9 +87,14 @@ JSONL log record per request.
   collapsed by default in a `<details>` block with the Copy button inside it. A
   real loading state (pulse indicator plus an elapsed-time-driven stage
   label and elapsed-time counter, `aria-live="polite"`) and a styled error
-  card (copy differentiated by timeout/network/HTTP/other failure kind)
-  replace the earlier button-label-only loading and single generic error
-  message. Requests time out client-side after 55s via `AbortController`. A small
+  card replace the earlier button-label-only loading and single generic error
+  message. Error copy is differentiated by `timeout` / `network` /
+  `api` / `http` / `other` kind; for an `api` failure the card shows the
+  backend's user-safe `detail.message` and the `request_id`, and the raw
+  `str(exc)` is never rendered. Requests time out client-side after 70s via
+  `AbortController` — a final safety bound above the backend provider-call
+  budget (2 attempts × 30s), so a classified backend error normally arrives
+  first. The browser does not auto-resubmit. A small
   "Demo mode" / "OpenAI mode" badge (`ModeBadge`, built on the existing `Pill`
   primitive) sits next to the run-metadata line, derived from
   `result.metadata.model` — no separate flag or endpoint.
@@ -130,7 +161,10 @@ Demo stub, so known gaps surface as real failures (see *Added in QC-3B*).
 Modes: no `backend/.env` file is required to run in Demo mode — it's the default
 with zero setup. To switch modes explicitly, copy `backend/.env.example` to
 `backend/.env`; `QUOTECHECK_USE_OPENAI=0` (default) = Demo mode (stub analyzer,
-no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
+no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`). OpenAI mode also
+honours `QUOTECHECK_OPENAI_TIMEOUT_SECONDS` (default 30) for the per-attempt
+provider timeout; a non-numeric / zero / negative value is rejected as a
+`configuration_error`.
 
 ## Capabilities
 
@@ -194,8 +228,13 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   (`eval/tests/test_stub_analyzer.py`). Semantic (Layer B) grading remains manual.
   QC-3C repaired the largest application-level Demo gaps the QC-3B baseline exposed
   (11/27 → 24/27 deterministic contract pass); 3 documented limitations remain.
-- No verified public deployment.
-- No repair/retry when model output fails schema validation.
+- No verified public deployment. OpenAI-mode failures are classified, bounded, and
+  logged (QC-4), but there is still no public rate limiting / quota control, no
+  input-length cap, no durable or centralized logging, and no live-deployment
+  verification — OpenAI mode is not yet safe to expose anonymously.
+- No semantic repair when model output fails schema validation: it is reported as
+  `invalid_model_output` and never patched or re-requested (deliberate — QC-4). No
+  bounded repair-retry either.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
 - The deterministic Demo analyzer and the shared `NormalizedCategory` taxonomy
   remain narrower than the general service / repair / parts / vendor product scope.
@@ -224,6 +263,62 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-4
+
+Explicit, bounded failure handling for the OpenAI execution path. **No eval
+corpus / graders / termsets / rubric change, no Demo analyzer behaviour change, no
+prompt change (`PROMPT_VERSION` stays `quotecheck_v0.4`), no schema change, no new
+dependency, no deployment work. No paid inference — every reliability test patches
+the OpenAI client boundary.** Demo eval rerun once, unchanged: **27/27 schema-valid,
+24/27 deterministic contract pass**; no new baseline committed.
+
+- **Failure taxonomy** (`backend/core/errors.py`): `FailureCategory` with 8 values —
+  `provider_timeout`, `provider_unavailable`, `provider_rate_limited`,
+  `provider_refusal`, `provider_incomplete_response`, `invalid_model_output`,
+  `configuration_error`, `internal_error` — each mapped once to an HTTP status, a
+  `retryable` flag, and a user-safe message. Provider/transport, model-output, and
+  configuration failures are kept conceptually separate.
+- **Timeout policy**: explicit per-attempt timeout
+  `QUOTECHECK_OPENAI_TIMEOUT_SECONDS` (default 30s, was the SDK's 600s default);
+  malformed value ⇒ `configuration_error` before any client construction.
+- **Retry policy / maximum provider attempts**: QuoteCheck owns the one automatic
+  retry. The SDK client is built with `max_retries=0`; a bounded no-backoff loop in
+  the analyzer retries **at most once**, and only for transient connection /
+  timeout / provider-5xx failures. Rate limiting (429) is user-retryable but not
+  auto-retried. **Maximum provider calls per `/analyze` request = 2**
+  (`config.OPENAI_MAX_ATTEMPTS`). `provider_attempts` in the log is the observed
+  count, not a guessed ceiling. No exponential-backoff machinery, no semantic
+  repair loop.
+- **OpenAI response-state handling**: refusal (explicit refusal part or
+  content-filter stop), incomplete/failed generation, empty structured content, and
+  non-JSON / schema-invalid output are each classified explicitly. A successful HTTP
+  response is not assumed to carry a usable result. Final Pydantic
+  `QuoteCheckResult` validation stays mandatory.
+- **Structured API errors**: `/analyze` failures return
+  `{"detail": {code, message, retryable, request_id}}` with the mapped status; a
+  `QuoteCheckError` exception handler on the app centralises this. No stack traces,
+  API keys, raw provider payloads, or internal filenames in the body. `request_id`
+  is preserved on failures.
+- **Failure logging**: sanitized classification fields added to each run record
+  (see `run_logger.py` above). Demo/OpenAI provenance stays mode-accurate on the
+  failure path.
+- **No silent Demo fallback**: an OpenAI-mode failure never invokes
+  `analyze_quote_stub` — test-guarded across every failure category.
+- **Frontend**: `frontend/src/App.jsx` parses the structured body and shows the
+  backend's user-safe message + `request_id` for `api` failures instead of
+  `HTTP 500: Internal Server Error`; `REQUEST_TIMEOUT_MS` raised 55s → 70s to sit
+  above the backend provider-call budget; no redesign, no auto-resubmit.
+- **Tests**: `eval/tests/test_openai_reliability.py` — 42 stdlib-`unittest` cases
+  covering classification, response-state handling, retry bounds, config
+  validation, the no-fallback boundary, the route/API contract, sanitized failure
+  logging, and the frontend/backend timeout-budget alignment. Run via the existing
+  `python -m unittest discover -s eval/tests -p 'test_*.py'` (76 → 118 harness
+  tests).
+
+Remaining after QC-4: no public rate limiting / quota controls, no input-length
+cap, no durable/centralized logs, no live-deployment verification, semantic eval
+still human, OpenAI mode not yet safe to expose anonymously.
 
 ### Fixed in QC-3C
 

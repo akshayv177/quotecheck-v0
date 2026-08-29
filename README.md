@@ -181,7 +181,7 @@ Request:
 { "quote_text": "Brake pads replacement recommended. Tyre rotation." }
 ```
 
-Response: **QuoteCheckResult** (schema-valid JSON) — see
+Response on success: **QuoteCheckResult** (schema-valid JSON) — see
 [`examples/sample_output.json`](examples/sample_output.json) for a full real example.
 
 * `line_items[]` — category, plain-English `explanation`, `vague_or_confusing` flag,
@@ -191,6 +191,19 @@ Response: **QuoteCheckResult** (schema-valid JSON) — see
 * `things_to_verify[]`
 * `uncertainty_markers`
 * `metadata` (request_id, prompt_version, model, created_at, latency_ms, schema_valid)
+
+Response on failure (OpenAI mode): a stable, user-safe envelope — never a stack
+trace, API key, or raw provider payload:
+
+```json
+{ "detail": { "code": "provider_timeout", "message": "The analysis service took too long to respond. Please try again.", "retryable": true, "request_id": "…" } }
+```
+
+`code` is one of a small fixed set (`provider_timeout`, `provider_unavailable`,
+`provider_rate_limited`, `provider_refusal`, `provider_incomplete_response`,
+`invalid_model_output`, `configuration_error`, `internal_error`); `retryable` means a
+manual retry may reasonably succeed (it does **not** mean QuoteCheck retried
+automatically).
 
 ---
 
@@ -219,8 +232,12 @@ OpenAI-path failure returns an error to the caller; it does **not** silently swi
 to Demo output.
 
 Every `/analyze` call appends one JSON line to `logs/app_runs.jsonl` (request_id,
-prompt_version, model, latency_ms, schema_valid, risk_counts, uncertainty, error).
-Inspect the latest entry:
+`analyzer` (`openai`/`demo`), `success`, prompt_version, model, latency_ms,
+schema_valid, risk_counts, uncertainty, and — on failure — `failure_category`,
+`retryable`, `cause_type` (exception class name only), `provider_status`,
+`provider_request_id`, `response_status`, `provider_attempts` (the actual number of
+provider calls made), and a short application-authored `error` string). Inspect the
+latest entry:
 
 ```bash
 tail -n 1 logs/app_runs.jsonl | python3 -m json.tool
@@ -238,6 +255,35 @@ When `QUOTECHECK_USE_OPENAI=1`, `/analyze` calls the **OpenAI Responses API** wi
 then re-validated with Pydantic before it is returned. The default configured model
 is `gpt-4o-mini` (`QUOTECHECK_MODEL`). There is no multi-provider abstraction — this
 is an OpenAI-only path.
+
+#### Reliability (QC-4)
+
+OpenAI-mode failures are **explicit and bounded**, not swallowed:
+
+- **Classified.** Every failure is mapped to one of eight categories and returned as
+  the structured error body shown under [API](#post-analyze) above — provider
+  timeout, connection/5xx, rate limit, refusal, incomplete response, invalid model
+  output, configuration error, or internal error are all distinct.
+- **No silent Demo fallback.** Mode is chosen once by configuration. An OpenAI-mode
+  failure stays an OpenAI-mode failure; the app never switches analyzers to make a
+  result look successful. The user may retry manually.
+- **Bounded timeout.** Each provider call has an explicit timeout
+  (`QUOTECHECK_OPENAI_TIMEOUT_SECONDS`, default 30s), not the SDK's 600s default.
+- **One clearly-owned retry.** The SDK client is built with `max_retries=0`;
+  QuoteCheck's own bounded loop retries **at most once**, and only for transient
+  connection / timeout / provider-5xx failures. Rate limiting (429) is surfaced as
+  user-retryable but is not auto-retried. **Maximum provider calls per request: 2.**
+  There is no exponential-backoff machinery and no semantic repair loop — a
+  schema-invalid response is reported, never patched or re-requested.
+- **Mandatory validation.** Structured Outputs plus a final Pydantic
+  `QuoteCheckResult` validation both remain; a response that cannot become a valid
+  result is `invalid_model_output`.
+- **Sanitized logging.** Failed runs are logged with the failure category,
+  Demo/OpenAI provenance, retryable flag, exception class name, and the observed
+  provider-attempt count — never a raw exception dump, API key, or provider payload.
+
+This is failure *handling*, not high availability: there is no SLA, no automatic
+recovery, no durable/centralized logging, and no live-deployment verification.
 
 ### Demo mode
 
@@ -292,7 +338,8 @@ cases guard domain leakage and unsupported price judgment.
   cards, risk badges, a "needs clarification" badge for vague/bundled charges,
   evidence-needed lists, vendor questions, things to verify, a Demo/OpenAI mode
   badge, staged progress + elapsed-time feedback while a request is in flight, a
-  client-side 55s timeout, and failure-specific error messages.
+  client-side 70s safety timeout, and failure-specific error copy driven by the
+  backend's structured error `code` (with the `request_id` shown for support).
 - JSONL run logging + prompt version discipline.
 - Config via `.env` (untracked) with safe defaults; secrets never committed.
 
@@ -301,7 +348,10 @@ cases guard domain leakage and unsupported price judgment.
 ## Limitations
 
 - Not production-ready: no auth, no database, no persistence beyond the local JSONL
-  log, no SLAs, no hardening, no production-scale monitoring or load testing.
+  log, no SLAs, no production-scale monitoring or load testing. OpenAI-mode failures
+  are now explicitly classified, bounded, and logged (QC-4), but there is still no
+  public rate limiting / quota control, no durable or centralized logging, and no
+  live-deployment verification — OpenAI mode is not yet safe to expose anonymously.
 - Paste-text input only — no PDF/OCR/image ingestion.
 - No market-price benchmarking, and no objective price-fairness judgment — QuoteCheck
   describes only what the quote itself states.
@@ -313,7 +363,8 @@ cases guard domain leakage and unsupported price judgment.
 - No persistent user history or accounts.
 - A deterministic eval / regression runner exists (`eval/`), but semantic grading is
   still manual and there is no CI (`docs/CURRENT_STATE.md` has the full gap list).
-- No repair/retry when model output fails schema validation.
+- No semantic repair when model output fails schema validation: it is reported as
+  `invalid_model_output`, never patched or re-requested (deliberate — QC-4).
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`;
   reproducibility relies on activating a compatible Python 3.10+ environment yourself.
 - QuoteCheck does not verify vendor claims, guarantee fair pricing, or replace a
@@ -409,7 +460,9 @@ docs/
 
 ## Roadmap
 
-1. Add bounded repair retry (if model output fails Pydantic validation)
+1. Deployment preparation: public rate limiting / quota control, input-length
+   caps, durable/centralized logging — the gate before OpenAI mode can be exposed
+   anonymously (QC-4 classified and bounded failures but did not add these)
 2. Eval: semantic Layer B review pass against `eval/rubric.md`; CI wiring for the
    deterministic runner (the runner and its Demo baseline exist)
 3. Cost controls: output token caps, shorter rationales, caching hooks, batch eval runs

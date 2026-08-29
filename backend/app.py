@@ -55,19 +55,42 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 
 from backend.core.schema import AnalyzeRequest, QuoteCheckResult
 from backend.core.run_logger import log_app_run
 from backend.core.prompt import PROMPT_VERSION
 from backend.core.config import APP_RUN_LOG_PATH, USE_OPENAI, MODEL, DEMO_ANALYZER_MODEL
+from backend.core.errors import FailureCategory, QuoteCheckError, error_response_body
 from backend.core.openai_analyzer import analyze_quote_openai
 from backend.core.stub_analyzer import analyze_quote_stub
 
 
 app = FastAPI(title="QuoteCheck API", version="0.1.0")
+
+# Provenance label for logs — stays mode-accurate on success and failure paths.
+ANALYZER_NAME = "openai" if USE_OPENAI else "demo"
+
+
+@app.exception_handler(QuoteCheckError)
+def _quotecheck_error_handler(request: Request, exc: QuoteCheckError) -> JSONResponse:
+    """Render a classified failure as a small, user-safe JSON body.
+
+    Never exposes stack traces, API keys, raw provider payloads, or internal
+    filenames — only ``code``, ``message``, ``retryable``, ``request_id``.
+    """
+    return JSONResponse(status_code=exc.http_status, content=error_response_body(exc))
+
+
+def _safe_log(**fields) -> None:
+    """Write one run-log record; a logging failure must not mask the analysis outcome."""
+    try:
+        log_app_run(**fields)
+    except Exception:  # noqa: BLE001 - observability is best-effort, never fatal
+        pass
 
 # Local development CORS policy.
 # Vite dev server typically runs on http://localhost:5173
@@ -110,13 +133,19 @@ def analyze(req: AnalyzeRequest):
     """
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
+    # Provenance must stay mode-accurate on every path: a Demo-mode failure
+    # never called OpenAI, so it must not log an OpenAI model id.
+    failure_model = MODEL if USE_OPENAI else DEMO_ANALYZER_MODEL
 
     try:
         # Analyzer selection (keeps app.py thin)
         if USE_OPENAI:
-            result, latency_ms = analyze_quote_openai(quote_text=req.quote_text, request_id=request_id)
+            result, latency_ms, provider_attempts = analyze_quote_openai(
+                quote_text=req.quote_text, request_id=request_id
+            )
         else:
             latency_ms = int((time.perf_counter() - t0) * 1000)
+            provider_attempts = None
             result = analyze_quote_stub(quote_text=req.quote_text, request_id=request_id, latency_ms=latency_ms)
 
         # Common: compute risk_counts for logs
@@ -127,7 +156,7 @@ def analyze(req: AnalyzeRequest):
                 risk_counts[rl] += 1
 
         # Common: success logging
-        log_app_run(
+        _safe_log(
             log_path=APP_RUN_LOG_PATH,
             request_id=request_id,
             prompt_version=result.metadata.prompt_version,
@@ -138,15 +167,17 @@ def analyze(req: AnalyzeRequest):
             risk_counts=risk_counts,
             uncertainty=result.uncertainty_markers.model_dump(),
             error=None,
+            analyzer=ANALYZER_NAME,
+            success=True,
+            provider_attempts=provider_attempts,
         )
         return result
 
-    except Exception as e:
+    except QuoteCheckError as e:
+        if e.request_id is None:
+            e.request_id = request_id
         latency_ms = int((time.perf_counter() - t0) * 1000)
-        # Provenance must stay mode-accurate on the failure path: a Demo-mode
-        # failure never called OpenAI, so it must not log an OpenAI model id.
-        failure_model = MODEL if USE_OPENAI else DEMO_ANALYZER_MODEL
-        log_app_run(
+        _safe_log(
             log_path=APP_RUN_LOG_PATH,
             request_id=request_id,
             prompt_version=PROMPT_VERSION,
@@ -156,6 +187,41 @@ def analyze(req: AnalyzeRequest):
             num_items=0,
             risk_counts={"red": 0, "yellow": 0, "green": 0},
             uncertainty={},
-            error=f"{type(e).__name__}: {e}",
+            error=e.log_error_field(),
+            analyzer=ANALYZER_NAME,
+            success=False,
+            failure_category=e.category.value,
+            retryable=e.retryable,
+            cause_type=e.cause_type,
+            provider_status=e.provider_status,
+            provider_request_id=e.provider_request_id,
+            response_status=e.response_status,
+            incomplete_reason=e.incomplete_reason,
+            provider_attempts=e.provider_attempts,
         )
         raise
+
+    except Exception as e:
+        # Any unclassified failure becomes an explicit internal_error — the raw
+        # exception is kept only as `cause` (class name logged, never its text).
+        wrapped = QuoteCheckError(FailureCategory.INTERNAL_ERROR, request_id=request_id, cause=e)
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        _safe_log(
+            log_path=APP_RUN_LOG_PATH,
+            request_id=request_id,
+            prompt_version=PROMPT_VERSION,
+            model=failure_model,
+            latency_ms=latency_ms,
+            schema_valid=False,
+            num_items=0,
+            risk_counts={"red": 0, "yellow": 0, "green": 0},
+            uncertainty={},
+            error=wrapped.log_error_field(),
+            analyzer=ANALYZER_NAME,
+            success=False,
+            failure_category=wrapped.category.value,
+            retryable=wrapped.retryable,
+            cause_type=wrapped.cause_type,
+            provider_attempts=None,
+        )
+        raise wrapped
