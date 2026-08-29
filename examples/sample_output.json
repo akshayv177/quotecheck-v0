@@ -38,7 +38,7 @@
         {
             "name_raw": "Other/unspecified charges (from quote)",
             "normalized_category": "unknown_needs_clarification",
-            "explanation": "The quote mentions one or more generically named or un-itemized charges (e.g. misc, labour, service charge, gas top-up). This stub cannot know what they specifically cover without an itemized breakdown from the vendor.",
+            "explanation": "The quote mentions one or more generically named or un-itemized charges (e.g. misc, service charge, handling, shop supplies, sundries). This stub cannot know what they specifically cover without an itemized breakdown from the vendor.",
             "vague_or_confusing": true,
             "recommended_action": "ask_for_evidence",
             "risk_level": "yellow",
@@ -61,7 +61,7 @@
         "Can you share photos or measurements (pad thickness, tread depth) that support the brake/tyre recommendation?",
         "Is this brake/tyre work needed immediately, or can it wait until after a second opinion?",
         "Are the replacement parts OEM or aftermarket, and what warranty do they carry?",
-        "Can you itemize exactly what the misc/labour/service charge covers?",
+        "Can you itemize exactly what the misc/service/handling charge covers?",
         "Is this a fixed fee or a time-based labour charge, and what's the hourly rate if applicable?",
         "Does this charge overlap with cost already included in another line item on the quote?"
     ],
@@ -83,8 +83,8 @@
     "metadata": {
         "prompt_version": "quotecheck_v0.4",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-08-28T06:58:51.998352Z",
-        "request_id": "d18f4cb6-855d-46ac-8a71-ac492010e0af",
+        "created_at": "2026-08-29T12:02:25.715245Z",
+        "request_id": "9cf23de4-400f-42c6-895f-585cd824c818",
         "latency_ms": 0,
         "schema_valid": true
     }

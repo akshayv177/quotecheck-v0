@@ -388,10 +388,15 @@ the human responsibility defined in [`rubric.md`](rubric.md).
 
 ### Latest committed Demo baseline
 
-[`results/summary_20260829T105921Z.md`](results/summary_20260829T105921Z.md) —
-27/27 schema-valid; 11/27 deterministic cases pass. The 16 failures are real,
-already-documented Demo-mode product gaps (most visibly `ambiguous_items_present`,
-hardcoded `true` in the stub); they are retained, not excluded.
+[`results/summary_20260829T115912Z.md`](results/summary_20260829T115912Z.md) (QC-3C) —
+27/27 schema-valid; 24/27 deterministic cases pass. The corpus was unchanged between
+this run and the previous one; the improvement is a Demo-analyzer contract repair, not
+an accuracy or quality gain. The 3 remaining failures are documented limitations of
+the coarse keyword Demo analyzer (`AUTO-004` `missing_quote_context`, `CONT-003` and
+`HVAC-003` `ambiguous_items_present`) and are retained, not excluded.
+
+The prior baseline [`results/summary_20260829T105921Z.md`](results/summary_20260829T105921Z.md)
+(QC-3B, 11/27) is kept for before/after comparison.
 
 ---
 

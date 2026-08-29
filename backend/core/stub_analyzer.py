@@ -13,10 +13,34 @@ not an automatic fallback: an OpenAI-mode failure returns an error to the caller
 it does not silently switch to this stub.
 
 This module returns a fully schema-valid QuoteCheckResult.
+
+Keyword design (QC-3C)
+----------------------
+Four small, single-purpose keyword lists drive the deterministic behaviour. Each
+one targets exactly one field and nothing else:
+
+- AC_APPLIANCE_TERMS / HOME_MAINTENANCE_TERMS / "brake|tyre|tire"
+  -> which coarse domain line item(s) to emit.
+- GENERIC_CHARGE_TERMS
+  -> whether a *line item* is `vague_or_confusing` (a genuinely vague charge label).
+- DEFERRED_DETAIL_TERMS
+  -> whether the *quote* has `missing_quote_context` (the quote's own words say
+     material detail is omitted, deferred, provisional, or externalised).
+- SAFETY_RISK_TERMS
+  -> whether `needs_professional_confirmation` is set (a named safety-critical
+     component or hazard is present).
+
+`ambiguous_items_present` is derived, never asserted directly:
+    ambiguous_items_present = any(item.vague_or_confusing for item in line_items)
+
+Quote-level context gaps and line-level vagueness are kept separate: a deferred
+quote-context phrase never marks a line item vague, and a vague charge label never
+sets `missing_quote_context` on its own.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from backend.core.config import DEMO_ANALYZER_MODEL
@@ -49,26 +73,40 @@ HOME_MAINTENANCE_TERMS = [
     "renovation",
 ]
 
+# Charge/line-level only. Purpose: recognise a genuinely vague charge *label*.
+# These set a line item's `vague_or_confusing`; they never touch
+# `missing_quote_context`. Bare "labour"/"labor" are deliberately NOT here -- they
+# match every ordinary itemised labour line. Entries are charge-like phrases, not
+# bare English words. Matched whole-word / whole-phrase (see `_matches_any`).
 GENERIC_CHARGE_TERMS = [
     "misc",
     "miscellaneous",
-    "labour",
-    "labor",
     "service charge",
-    "gas top-up",
+    "service handling",
+    "handling charge",
+    "shop supplies",
+    "sundries",
+    "site charge",
+    "site charges",
+    "materials as required",
+    "materials extra",
+    "labour adjustment",
+    "labor adjustment",
+    "labour extra",
+    "lump sum",
     "consumables",
     "other charges",
     "unitemized charges",
+    "gas top-up",
 ]
 
-# Explicit phrases that indicate the quote itself defers, omits, externalises, or
-# only approximates material context (scope / parts / measurements / diagnostic
-# basis / itemisation). Fixed substrings, matched case-insensitively — the same
-# transparent keyword technique used by the lists above, not language understanding.
-# Used only to set uncertainty_markers.missing_quote_context deterministically.
-MISSING_CONTEXT_PHRASES = [
+# Quote-level only. Purpose: the quote's own wording says material context is
+# omitted, deferred, provisional, or externalised to a conversation/attachment.
+# These set `missing_quote_context` and nothing else. Matched whole-word /
+# whole-phrase, case-insensitive. "not included" was removed in QC-3C -- it
+# matched benign "Not included, chargeable separately ..." exclusions lists.
+DEFERRED_DETAIL_TERMS = [
     "no specific",
-    "not included",
     "no measurements",
     "no parts",
     "follow-up estimate",
@@ -82,7 +120,122 @@ MISSING_CONTEXT_PHRASES = [
     "see attached",
     "depending on additional work",
     "additional work found",
+    "consolidated figure",
+    "consolidated figures",
+    "diagnostic report available",
+    "provisional",
+    "subject to inspection",
+    "site inspection",
+    "to be assessed",
+    "to be confirmed",
+    "will be advised",
+    "will be assessed",
+    "will be revised",
+    "estimate may vary",
+    "indicative total",
+    "indicative cost",
+    "firm quote",
+    "firm estimate",
+    "as per work",
+    "at actual",
+    "at actuals",
 ]
+
+# Named safety-critical components / hazards -- never a trade or domain name.
+# Presence of one in the quote sets `needs_professional_confirmation`. Matched
+# whole-word / whole-phrase (not naive substring); inflected forms are listed
+# explicitly rather than relying on partial matches. Broad words such as
+# "suspension", "automotive", "contractor" are deliberately excluded.
+SAFETY_RISK_TERMS = [
+    # structural / load-bearing
+    "load bearing",
+    "load-bearing",
+    "structural",
+    "lintel",
+    "rsj",
+    # mains-electrical safety components
+    "consumer unit",
+    "earth bonding",
+    "earthing",
+    "rcbo",
+    "rcbos",
+    "rcd",
+    "residual current device",
+    "distribution board",
+    # sealed-refrigerant work
+    "brazing",
+    "system evacuation",
+    "sealed system",
+    "refrigerant recharge",
+    "gas charging",
+    "compressor replacement",
+    # safety-critical mechanical components
+    "brake",
+    "brakes",
+    "control arm",
+    "control arms",
+    "ball joint",
+    "ball joints",
+    "steering",
+    "tie rod",
+    "tie rods",
+]
+
+# Tiny set of on-line "this figure is not firm" tokens, used only alongside a
+# monetary amount on the *same* source line to flag that priced line as vague.
+APPROX_LINE_TOKENS = [
+    "approx",
+    "tbd",
+    "to be confirmed",
+    "range",
+    "may vary",
+    "may need",
+]
+
+_AMOUNT_RE = re.compile(
+    r"(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?|\b\d[\d,]{2,}\s*/-",
+    re.IGNORECASE,
+)
+_SKIP_LINE_RE = re.compile(
+    r"\b(total|subtotal|sub-total|grand total|tax|gst|vat)\b",
+    re.IGNORECASE,
+)
+_MAX_EXTRACTED_ITEMS = 5
+
+
+def _term_pattern(term: str) -> re.Pattern[str]:
+    """Whole-word / whole-phrase, case-insensitive; internal spaces match any run
+    of whitespace. `foo` does not match `foobar`; `a b` does not match `a bc`."""
+    body = r"\s+".join(re.escape(part) for part in term.split())
+    return re.compile(rf"(?<!\w){body}(?!\w)", re.IGNORECASE)
+
+
+_COMPILED: dict[str, re.Pattern[str]] = {}
+
+
+def _matches_any(text: str, terms: list[str]) -> bool:
+    for term in terms:
+        pat = _COMPILED.get(term)
+        if pat is None:
+            pat = _COMPILED[term] = _term_pattern(term)
+        if pat.search(text):
+            return True
+    return False
+
+
+def _line_has_amount(line: str) -> bool:
+    return bool(_AMOUNT_RE.search(line))
+
+
+def _is_itemised_line(line: str) -> bool:
+    """A line that reads like a priced quote line: a label plus a monetary amount,
+    not a total/tax/subtotal line."""
+    if _SKIP_LINE_RE.search(line):
+        return False
+    if not _line_has_amount(line):
+        return False
+    alpha = sum(ch.isalpha() for ch in line)
+    return alpha >= 3
 
 
 def _verifying_professional(*, vehicle_matched: bool, ac_matched: bool, home_matched: bool) -> str:
@@ -149,7 +302,7 @@ def _domain_questions_and_verification(
 
     if generic_charge_matched:
         questions += [
-            "Can you itemize exactly what the misc/labour/service charge covers?",
+            "Can you itemize exactly what the misc/service/handling charge covers?",
             "Is this a fixed fee or a time-based labour charge, and what's the hourly rate if applicable?",
             "Does this charge overlap with cost already included in another line item on the quote?",
         ]
@@ -174,6 +327,78 @@ def _domain_questions_and_verification(
     return questions, verify
 
 
+def _generic_charge_item() -> LineItem:
+    return LineItem(
+        name_raw="Other/unspecified charges (from quote)",
+        normalized_category=NormalizedCategory.unknown_needs_clarification,
+        explanation=(
+            "The quote mentions one or more generically named or un-itemized "
+            "charges (e.g. misc, service charge, handling, shop supplies, "
+            "sundries). This stub cannot know what they specifically cover "
+            "without an itemized breakdown from the vendor."
+        ),
+        vague_or_confusing=True,
+        recommended_action=RecommendedAction.ask_for_evidence,
+        risk_level=RiskLevel.yellow,
+        confidence=0.40,
+        rationale_short="Generic or bundled charges are unclear without an itemized breakdown; ask the vendor to itemize them.",
+        price=None,
+        evidence_needed=[
+            "Itemized breakdown of what this charge covers",
+            "Confirm whether this is a fixed fee or time-based labour charge",
+        ],
+    )
+
+
+def _no_detail_fallback_item() -> LineItem:
+    return LineItem(
+        name_raw="Unclear item(s) - needs clarification",
+        normalized_category=NormalizedCategory.unknown_needs_clarification,
+        explanation=(
+            "The quote text lacks enough detail (e.g. part names, measurements, "
+            "priced line items) for this stub to explain what the charge covers "
+            "or why it might be recommended."
+        ),
+        vague_or_confusing=True,
+        recommended_action=RecommendedAction.unknown,
+        risk_level=RiskLevel.yellow,
+        confidence=0.35,
+        rationale_short="The quote text lacks enough detail to classify items reliably. Ask the vendor for an itemized breakdown.",
+        price=None,
+        evidence_needed=[
+            "Itemized parts + labor list",
+            "Reason for each recommendation",
+        ],
+    )
+
+
+def _extracted_line_item(line: str, *, vague: bool) -> LineItem:
+    name = line.strip()
+    if len(name) > 120:
+        name = name[:117].rstrip() + "..."
+    return LineItem(
+        name_raw=name or "Quote line (from quote)",
+        normalized_category=NormalizedCategory.unknown_needs_clarification,
+        explanation=(
+            "This is a priced line taken from the quote as written. The Demo "
+            "analyzer does not recognise the domain, so it cannot classify what "
+            "the line covers or why it is recommended - the figure and label are "
+            "reproduced from the quote for you to check with the vendor."
+        ),
+        vague_or_confusing=vague,
+        recommended_action=RecommendedAction.consider,
+        risk_level=RiskLevel.yellow,
+        confidence=0.40,
+        rationale_short=(
+            "Charge label is generic or the figure is not firm; ask the vendor what it covers."
+            if vague
+            else "Line is itemised with an amount but not classified; confirm what it covers and why."
+        ),
+        price=None,
+        evidence_needed=["Confirm what this line covers and why it is recommended"],
+    )
+
+
 def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> QuoteCheckResult:
     """
     Analyze a quote using simple keyword heuristics and return a schema-valid
@@ -194,12 +419,13 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         Deterministic, schema-valid output.
     """
     text_lower = quote_text.lower()
-    items = []
+    items: list[LineItem] = []
 
     vehicle_matched = "brake" in text_lower or "tyre" in text_lower or "tire" in text_lower
     ac_matched = any(term in text_lower for term in AC_APPLIANCE_TERMS)
     home_matched = any(term in text_lower for term in HOME_MAINTENANCE_TERMS)
-    generic_charge_matched = any(term in text_lower for term in GENERIC_CHARGE_TERMS)
+    generic_charge_matched = _matches_any(text_lower, GENERIC_CHARGE_TERMS)
+    domain_matched = vehicle_matched or ac_matched or home_matched
 
     if "brake" in text_lower:
         items.append(
@@ -302,51 +528,34 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         )
 
     if generic_charge_matched:
-        items.append(
-            LineItem(
-                name_raw="Other/unspecified charges (from quote)",
-                normalized_category=NormalizedCategory.unknown_needs_clarification,
-                explanation=(
-                    "The quote mentions one or more generically named or "
-                    "un-itemized charges (e.g. misc, labour, service charge, gas "
-                    "top-up). This stub cannot know what they specifically cover "
-                    "without an itemized breakdown from the vendor."
-                ),
-                vague_or_confusing=True,
-                recommended_action=RecommendedAction.ask_for_evidence,
-                risk_level=RiskLevel.yellow,
-                confidence=0.40,
-                rationale_short="Generic or bundled charges are unclear without an itemized breakdown; ask the vendor to itemize them.",
-                price=None,
-                evidence_needed=[
-                    "Itemized breakdown of what this charge covers",
-                    "Confirm whether this is a fixed fee or time-based labour charge",
-                ],
-            )
-        )
+        items.append(_generic_charge_item())
+
+    # Line-level scan. Never sets a quote-wide flag; only adds line items and
+    # decides their own `vague_or_confusing`.
+    lines = quote_text.splitlines()
+    if not domain_matched and not generic_charge_matched:
+        # Unrecognised domain: emit one item per priced line instead of a single
+        # vague "needs clarification" fallback, when the quote actually has >= 2
+        # priced lines.
+        itemised = [ln for ln in lines if _is_itemised_line(ln)]
+        if len(itemised) >= 2:
+            for ln in itemised[:_MAX_EXTRACTED_ITEMS]:
+                low = ln.lower()
+                vague = _matches_any(low, GENERIC_CHARGE_TERMS) or (
+                    _line_has_amount(ln) and _matches_any(low, APPROX_LINE_TOKENS)
+                )
+                items.append(_extracted_line_item(ln, vague=vague))
+    else:
+        # A domain/generic item already exists: still flag any individual priced
+        # line whose own text says the figure is not firm.
+        for ln in lines:
+            if _SKIP_LINE_RE.search(ln):
+                continue
+            if _line_has_amount(ln) and _matches_any(ln.lower(), APPROX_LINE_TOKENS):
+                items.append(_extracted_line_item(ln, vague=True))
 
     if not items:
-        items.append(
-            LineItem(
-                name_raw="Unclear item(s) - needs clarification",
-                normalized_category=NormalizedCategory.unknown_needs_clarification,
-                explanation=(
-                    "The quote text lacks enough detail (e.g. part names, "
-                    "measurements) for this stub to explain what the charge covers "
-                    "or why it might be recommended."
-                ),
-                vague_or_confusing=True,
-                recommended_action=RecommendedAction.unknown,
-                risk_level=RiskLevel.yellow,
-                confidence=0.35,
-                rationale_short="The quote text lacks enough detail to classify items reliably. Ask the service center for an itemized breakdown.",
-                price=None,
-                evidence_needed=[
-                    "Itemized parts + labor list",
-                    "Reason for each recommendation",
-                ],
-            )
-        )
+        items.append(_no_detail_fallback_item())
 
     overall_summary = [
         "This report explains each line item in plain language, flags risk level, and lists questions to ask the vendor before approving.",
@@ -369,27 +578,29 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         generic_charge_matched=generic_charge_matched,
     )
 
-    # Deterministic uncertainty markers (no hardcoded vehicle/mechanic values).
-    #
-    # missing_quote_context: only when there is evidence in the quote that
-    # material context is actually absent — an explicit missing/deferred-context
-    # phrase, or a quote that resolves to nothing but generic/bundled charges with
-    # no substantive service item. Not set merely because a domain was not
-    # recognised, and not a mirror of the vague-charge flag alone.
-    explicit_missing_context = any(term in text_lower for term in MISSING_CONTEXT_PHRASES)
-    only_generic_charges = generic_charge_matched and not (
-        vehicle_matched or ac_matched or home_matched
-    )
-    missing_quote_context = explicit_missing_context or only_generic_charges
+    # --- Uncertainty markers -------------------------------------------------
+    # ambiguous_items_present: a pure summary of the line-item analysis. Nothing
+    # else sets it; it never disagrees with the items.
+    ambiguous_items_present = any(li.vague_or_confusing for li in items)
 
-    # needs_professional_confirmation: domain-neutral — true when the deterministic
-    # risk logic above flagged genuinely safety-sensitive work (red risk or a
-    # safety_critical category), regardless of trade.
+    # missing_quote_context: quote-level only. True when the quote's own wording
+    # defers/omits/externalises material detail (DEFERRED_DETAIL_TERMS), or when
+    # the analysis resolved to nothing but unclear charges. Not set merely
+    # because a domain was unrecognised, and not a mirror of the vague-charge
+    # flag on a single line.
+    deferred_detail_matched = _matches_any(text_lower, DEFERRED_DETAIL_TERMS)
+    only_unclear_items = bool(items) and all(li.vague_or_confusing for li in items)
+    missing_quote_context = deferred_detail_matched or only_unclear_items
+
+    # needs_professional_confirmation: domain-neutral. True when a line item is
+    # red risk or safety_critical, or the quote names a safety-critical component
+    # or hazard (SAFETY_RISK_TERMS, whole-word). Never triggered by trade/domain
+    # identity alone.
     needs_professional_confirmation = any(
-        it.risk_level == RiskLevel.red
-        or it.normalized_category == NormalizedCategory.safety_critical
-        for it in items
-    )
+        li.risk_level == RiskLevel.red
+        or li.normalized_category == NormalizedCategory.safety_critical
+        for li in items
+    ) or _matches_any(text_lower, SAFETY_RISK_TERMS)
 
     return QuoteCheckResult(
         line_items=items,
@@ -397,7 +608,7 @@ def analyze_quote_stub(*, quote_text: str, request_id: str, latency_ms: int) -> 
         verification_questions=verification_questions,
         things_to_verify=things_to_verify,
         uncertainty_markers=UncertaintyMarkers(
-            ambiguous_items_present=True,
+            ambiguous_items_present=ambiguous_items_present,
             missing_quote_context=missing_quote_context,
             needs_professional_confirmation=needs_professional_confirmation,
         ),

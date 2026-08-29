@@ -3,12 +3,12 @@
         {
             "name_raw": "Unclear item(s) - needs clarification",
             "normalized_category": "unknown_needs_clarification",
-            "explanation": "The quote text lacks enough detail (e.g. part names, measurements) for this stub to explain what the charge covers or why it might be recommended.",
+            "explanation": "The quote text lacks enough detail (e.g. part names, measurements, priced line items) for this stub to explain what the charge covers or why it might be recommended.",
             "vague_or_confusing": true,
             "recommended_action": "unknown",
             "risk_level": "yellow",
             "confidence": 0.35,
-            "rationale_short": "The quote text lacks enough detail to classify items reliably. Ask the service center for an itemized breakdown.",
+            "rationale_short": "The quote text lacks enough detail to classify items reliably. Ask the vendor for an itemized breakdown.",
             "price": null,
             "evidence_needed": [
                 "Itemized parts + labor list",
@@ -41,8 +41,8 @@
     "metadata": {
         "prompt_version": "quotecheck_v0.4",
         "model": "quotecheck-demo-analyzer",
-        "created_at": "2026-08-28T06:58:52.035530Z",
-        "request_id": "c2c4f4ce-8c7d-4241-afb6-bc72ea2ca002",
+        "created_at": "2026-08-29T12:02:25.719483Z",
+        "request_id": "dec2a9f3-9d40-4167-a1bc-a3b64cae9324",
         "latency_ms": 0,
         "schema_valid": true
     }
