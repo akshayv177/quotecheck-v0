@@ -39,7 +39,11 @@ const API_BASE = "http://localhost:8000";
 
 const DEMO_ANALYZER_MODEL = "quotecheck-demo-analyzer";
 
-const REQUEST_TIMEOUT_MS = 55_000; // ~2.75x the ~20s typical real-LLM-mode latency
+// Final client-side safety bound only. It sits above the backend provider-call
+// budget (up to 2 attempts x 30s per QUOTECHECK_OPENAI_TIMEOUT_SECONDS), so
+// under normal failure conditions the backend returns a structured QuoteCheck
+// error first and the user sees classified copy rather than this generic abort.
+const REQUEST_TIMEOUT_MS = 70_000;
 
 const STAGES = [
   { label: "Reading the quote…", minMs: 0 },
@@ -63,7 +67,7 @@ function formatElapsed(ms) {
 const NETWORK_ERROR_MESSAGE =
   "Couldn't reach the QuoteCheck backend. Make sure it's running at http://localhost:8000, then try again.";
 const TIMEOUT_ERROR_MESSAGE =
-  "This is taking longer than expected (over 55 seconds), so QuoteCheck gave up waiting. " +
+  "This is taking longer than expected (over 70 seconds), so QuoteCheck gave up waiting. " +
   "If you're running in AI mode the model call may be slow or stuck — try again, or check the backend terminal for errors.";
 
 export default function App() {
@@ -117,8 +121,24 @@ export default function App() {
         signal: controller.signal
       });
       if (!r.ok) {
-        const text = await r.text();
-        const httpErr = new Error(`HTTP ${r.status}: ${text}`);
+        // Preferred path: the backend's structured failure body
+        // { detail: { code, message, retryable, request_id } }.
+        let apiErr = null;
+        try {
+          const body = await r.json();
+          const d = body && body.detail;
+          if (d && typeof d === "object" && d.code && d.message) {
+            apiErr = new Error(d.message);
+            apiErr.kind = "api";
+            apiErr.code = d.code;
+            apiErr.retryable = Boolean(d.retryable);
+            apiErr.requestId = d.request_id || null;
+          }
+        } catch {
+          // body was not JSON / not the expected shape — fall through
+        }
+        if (apiErr) throw apiErr;
+        const httpErr = new Error(`HTTP ${r.status}`);
         httpErr.kind = "http";
         throw httpErr;
       }
@@ -127,6 +147,8 @@ export default function App() {
     } catch (e) {
       if (e.name === "AbortError") setErr({ kind: "timeout", message: TIMEOUT_ERROR_MESSAGE });
       else if (e instanceof TypeError) setErr({ kind: "network", message: NETWORK_ERROR_MESSAGE });
+      else if (e.kind === "api")
+        setErr({ kind: "api", message: e.message, code: e.code, retryable: e.retryable, requestId: e.requestId });
       else if (e.kind === "http") setErr({ kind: "http", message: e.message });
       else setErr({ kind: "other", message: String(e?.message || e) });
       setResult(null);
@@ -203,6 +225,9 @@ export default function App() {
             <div className="qc-error-card__hint">
               Check that the backend is running on port 8000.
             </div>
+          )}
+          {err.kind === "api" && err.requestId && (
+            <div className="qc-error-card__hint">request_id: {err.requestId}</div>
           )}
         </div>
       )}

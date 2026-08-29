@@ -62,22 +62,42 @@ def log_app_run(
         risk_counts: Dict[str, int],
         uncertainty: Optional[Dict[str, Any]] = None,
         error: Optional[str] = None,
+        analyzer: Optional[str] = None,
+        success: Optional[bool] = None,
+        failure_category: Optional[str] = None,
+        retryable: Optional[bool] = None,
+        cause_type: Optional[str] = None,
+        provider_status: Optional[int] = None,
+        provider_request_id: Optional[str] = None,
+        response_status: Optional[str] = None,
+        incomplete_reason: Optional[str] = None,
+        provider_attempts: Optional[int] = None,
 ) -> None:
     """
     Write one structured log record for an interactive /analyze run.
 
-    This is the minimal observability spine for v0.
+    This is the minimal observability spine for v0, extended in QC-4 with
+    sanitized failure-classification fields.
 
     Notes
     -----
-    - 'schema_valid' refers to whether the response validated against the 
-       QuoteCheckResult schema.
-    - 'error' should be a short string (no giant stack traces) 
+    - 'analyzer' is 'openai' or 'demo' — provenance stays mode-accurate on both
+      the success and failure paths.
+    - 'schema_valid' refers to whether the response validated against the
+      QuoteCheckResult schema.
+    - 'error' is a short, application-authored string. It must never contain a
+      raw provider exception dump, a traceback, a request body, or an API key.
+    - 'cause_type' is the underlying exception class name only (e.g.
+      'APITimeoutError') — never its message.
+    - 'provider_attempts' is the actual number of provider calls made for this
+      request, counted in the analyzer's retry loop.
     """
     record = {
         "event": "quotecheck_analyze",
         "created_at": utc_now_iso(),
         "request_id": request_id,
+        "analyzer": analyzer,
+        "success": success,
         "prompt_version": prompt_version,
         "model": model,
         "latency_ms": latency_ms,
@@ -85,6 +105,14 @@ def log_app_run(
         "num_items": num_items,
         "risk_counts": risk_counts,
         "uncertainty": uncertainty,
+        "failure_category": failure_category,
+        "retryable": retryable,
+        "cause_type": cause_type,
+        "provider_status": provider_status,
+        "provider_request_id": provider_request_id,
+        "response_status": response_status,
+        "incomplete_reason": incomplete_reason,
+        "provider_attempts": provider_attempts,
         "error": error,
     }
     append_jsonl(log_path, record)
