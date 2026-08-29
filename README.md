@@ -271,11 +271,15 @@ cases guard domain leakage and unsupported price judgment.
 - The runner does **not** score semantics and does **not** measure model accuracy,
   hallucination rate, or production readiness. A Layer A pass rate is not a quality
   number. There is no CI wiring yet.
-- Latest committed Demo-mode baseline
-  ([`eval/results/summary_20260829T105921Z.md`](eval/results/summary_20260829T105921Z.md)):
-  27/27 schema-valid; 11/27 deterministic cases pass. The 16 failures are known,
-  already-documented Demo-mode gaps (e.g. `ambiguous_items_present` is hardcoded
-  `true` in the stub) and are retained rather than excluded.
+- Demo-mode baselines (same 27-case corpus, unchanged between runs):
+  - Initial ([`eval/results/summary_20260829T105921Z.md`](eval/results/summary_20260829T105921Z.md),
+    QC-3B): 27/27 schema-valid; 11/27 deterministic contract cases passed.
+  - After Demo contract alignment
+    ([`eval/results/summary_20260829T115912Z.md`](eval/results/summary_20260829T115912Z.md),
+    QC-3C): 27/27 schema-valid; 24/27 deterministic contract cases passed.
+  - This is a deterministic contract/regression pass count, not an accuracy, model-quality,
+    or hallucination measurement. The 3 remaining failures are documented limitations of
+    the coarse keyword Demo analyzer and are retained rather than excluded.
 - Harness self-tests: `python -m unittest discover -s eval/tests -p 'test_*.py' -v`.
 
 ---

@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-29 (QC-3B)
+Last updated: 2026-08-29 (QC-3C)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -189,27 +189,103 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
   Reproducibility depends on the developer activating a compatible Python 3.10+
   environment themselves (README documents a conda-based path).
-- No backend tests and no CI. A deterministic eval/regression runner exists
-  (`eval/`, QC-3B) and has stdlib self-tests, but semantic grading remains manual,
-  and the application-level Demo gaps its baseline reveals are unresolved.
+- No CI. A deterministic eval/regression runner exists (`eval/`, QC-3B) with stdlib
+  self-tests, plus focused Demo-analyzer unit tests added in QC-3C
+  (`eval/tests/test_stub_analyzer.py`). Semantic (Layer B) grading remains manual.
+  QC-3C repaired the largest application-level Demo gaps the QC-3B baseline exposed
+  (11/27 → 24/27 deterministic contract pass); 3 documented limitations remain.
 - No verified public deployment.
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
 - The deterministic Demo analyzer and the shared `NormalizedCategory` taxonomy
-  remain narrower than the general service / repair / parts / vendor product scope,
-  and carry vehicle-era wording. The OpenAI-mode prompt's copy was made domain-generic
-  in TASK-012 (see below), but the taxonomy itself is unchanged. The Demo-mode stub's
-  keyword coverage was broadened in TASK-008 (vehicle, AC/appliance, home maintenance)
-  but is still a small fixed keyword list, not real language understanding, and only
-  covers Demo mode.
+  remain narrower than the general service / repair / parts / vendor product scope.
+  The OpenAI-mode prompt's copy was made domain-generic in TASK-012 (see below), but
+  the taxonomy itself is unchanged. The Demo-mode stub's keyword coverage was
+  broadened in TASK-008 and again in QC-3C (bundled-charge labels, deferred-context
+  phrases, safety-critical component/hazard terms, a line scan for unrecognised
+  domains) but is still a small fixed keyword set, not real language understanding,
+  and only covers Demo mode.
+- The Demo analyzer emits at most one coarse line item per matched domain, so it
+  cannot flag conditional uncertainty confined to a single sub-line as
+  `ambiguous_items_present` without over-flagging the whole quote (QC-3C corpus
+  residuals `CONT-003`, `HVAC-003`). It also cannot infer `missing_quote_context`
+  from a symptom-only safety recommendation that carries no explicit
+  deferred/omitted-detail phrasing (`AUTO-004`).
 - No market-price benchmarking and no objective price-fairness judgment anywhere in
   the system.
 - No verification of vendor claims against external authoritative sources.
 - Stub's generic-charge catch-all is a fixed keyword list, not real line-item
-  extraction; a quote whose vague charges don't match one of those keywords still
-  falls through to the single generic "needs clarification" item.
+  extraction. QC-3C broadened it (`shop supplies`, `sundries`, `service handling`,
+  `site charge(s)`, `materials as required`, `labour adjustment`, `lump sum`, …) and
+  added a currency-token line scan so an unrecognised-domain quote with ≥ 2 priced
+  lines is reproduced line by line instead of collapsing to one generic item — but a
+  vague charge whose label matches none of the keywords, and an unrecognised-domain
+  quote with fewer than 2 priced lines, still fall through to the single generic
+  "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Fixed in QC-3C
+
+Baseline-driven repair of clearly incorrect or over-broad deterministic behaviour in
+the Demo (stub) analyzer, using the QC-3B baseline as evidence. **The eval corpus,
+termsets, rubric, graders, OpenAI analyzer, prompt (`PROMPT_VERSION` unchanged at
+`quotecheck_v0.4`), schema, frontend, and dependencies were not touched. No paid API
+call.** Same 27-case corpus rerun once: **deterministic contract pass count improved
+from 11/27 to 24/27** (27/27 schema-valid both runs). This is a contract/regression
+pass count, not an accuracy or model-quality number.
+
+- `backend/core/stub_analyzer.py`:
+  - `uncertainty_markers.ambiguous_items_present` is now derived —
+    `any(item.vague_or_confusing for item in line_items)` — never hardcoded `true`.
+  - Bare `"labour"` / `"labor"` removed from the generic vague-charge list (it matched
+    every ordinary itemised labour line, spuriously creating a vague item and setting
+    `missing_quote_context`). Replaced/extended with charge-like phrases only
+    (`shop supplies`, `sundries`, `service handling`, `handling charge`,
+    `site charge(s)`, `materials as required`, `materials extra`, `labour adjustment`,
+    `labour extra`, `lump sum`, …).
+  - `MISSING_CONTEXT_PHRASES` replaced by `DEFERRED_DETAIL_TERMS`, a single
+    quote-level list (drops `"not included"`, which matched benign exclusions lists;
+    adds provisional/deferred/externalised wording). It sets `missing_quote_context`
+    only — it never marks a line item vague. `missing_quote_context =
+    deferred_detail_matched or (items and all items vague)`; the old
+    domain-dependent `only_generic_charges` rule is gone.
+  - New `SAFETY_RISK_TERMS` (whole-word matched): structural/load-bearing,
+    mains-electrical safety components, sealed-refrigerant work, and safety-critical
+    mechanical component names (`brake`, `control arm`, `ball joint`, `steering`,
+    `tie rod`). `needs_professional_confirmation` is now `any red/safety_critical
+    line item` **or** one of these terms present — never triggered by trade/domain
+    identity alone. Broad words (`suspension`, `automotive`, `contractor`) are not
+    triggers.
+  - Modest line scan: when no domain and no generic-charge term matched and the quote
+    has ≥ 2 priced lines, emit one line item per line instead of a single generic
+    fallback; independently, any priced line whose own text says the figure is not
+    firm (`approx` + amount, `range`, `may vary`, …) becomes a vague line item.
+- `eval/tests/test_stub_analyzer.py` (new): focused stdlib-`unittest` tests for the
+  Demo analyzer (derived ambiguity flag, quote-level vs line-level separation, no
+  bare-`labour` false positive, unknown-domain non-collapse, conservative
+  professional confirmation, no vehicle leakage, no affirmative price judgment checked
+  against the real high-precision `price_judgment` termset). Harness self-tests:
+  60 → 76, all pass.
+- `examples/*.json` (6 files) regenerated through the real Demo `/analyze` path (no
+  OpenAI); inputs unchanged. Net marker changes: `ambiguous_items_present` now
+  derived (false for `home_maintenance`/`ac_repair`, which have no vague line item);
+  `ac_repair` `needs_professional_confirmation` → true (names compressor replacement +
+  refrigerant recharge). Scope note: the QC-3C ticket's file scope was explicitly
+  expanded to cover `examples/*.json` (see the ticket and review bundle).
+- `eval/results/run_20260829T115912Z.jsonl` + `summary_20260829T115912Z.md` — new
+  Demo baseline. The QC-3B baseline (`*_20260829T105921Z.*`) is retained for
+  before/after comparison.
+- Docs: `README.md` (Evaluation section: both baselines), `eval/README.md`
+  (latest-baseline pointer), this file.
+
+Remaining Demo-analyzer limitations after QC-3C (documented, not chased): `AUTO-004`
+fails `missing_quote_context` (symptom-only safety recommendation with no explicit
+deferred-detail phrasing — a semantic judgment); `CONT-003` and `HVAC-003` fail
+`ambiguous_items_present` (conditional uncertainty confined to one sub-line that the
+coarse one-item-per-domain analyzer cannot flag without over-flagging the whole
+quote). REG-001 and REG-002 leakage / price-judgment guards pass; both REG cases now
+pass in full.
 
 ### Added in QC-3B
 
