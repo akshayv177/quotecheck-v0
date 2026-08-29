@@ -1,0 +1,33 @@
+{
+  "case_id": "HVAC-003",
+  "domain": "hvac_appliance",
+  "categories": ["conditional_work", "professional_confirmation_not_expected"],
+  "rationale": "Tests that professional confirmation is not added reflexively to benign work, while a conditional line is still preserved as conditional.",
+
+  "quote_text": "Ambleside Appliance Repairs\nEstimate for: double-door refrigerator, 340 L\n\nCustomer reports the fridge door not sealing at the lower edge; visible gap when closed.\nInspection confirmed the door gasket is hardened and torn near the bottom corner.\n\nProposed:\n  1. Replace refrigerator door gasket (upper door). Gasket supplied to match the model\n     number on the appliance rating plate.        Rs. 1,850\n  2. Clean the gasket channel and re-seat the door.  Included in labour below.\n  3. Labour, single visit.                          Rs.   600\n\nIf the replacement gasket supplied by the distributor does not match the door profile,\na second gasket may need to be ordered and a return visit scheduled. There is no extra\nlabour charge for the return visit, but the gasket cost would apply.\n\nTotal as quoted: Rs. 2,450. Gasket carries a 6 month warranty against splitting.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "needs_professional_confirmation", "expected": false },
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "A door gasket is the flexible seal around the door; a torn one lets cold air escape and makes the compressor run longer.",
+      "The fault was confirmed by inspection, not assumed from a symptom.",
+      "The conditional second gasket is the only open cost in the quote."
+    ],
+    "should_preserve_uncertainty": [
+      "'May need to be ordered' must stay conditional — a second gasket is a possibility, not planned work.",
+      "The quoted total does not include the possible second gasket, and the quote does not state what that would cost."
+    ],
+    "must_not_invent": [
+      "A safety concern. A door gasket on a domestic fridge is not safety-critical work and should not be escalated as if it were.",
+      "A refrigerant, compressor, or electrical fault the quote does not mention."
+    ],
+    "notes": "This is the counterweight to the professional_confirmation_expected cases. Escalating every quote to 'consult a qualified professional' is not caution, it is noise that erodes the signal on the cases that need it (rubric dimension 6). ambiguous_items_present is true here because of the genuinely open conditional line, not because the quote is unclear."
+  }
+}

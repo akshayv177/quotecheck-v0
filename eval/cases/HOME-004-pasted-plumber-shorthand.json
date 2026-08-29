@@ -1,0 +1,34 @@
+{
+  "case_id": "HOME-004",
+  "domain": "plumbing_home",
+  "categories": ["noisy_input", "vague_bundled_charge"],
+  "rationale": "Tests a realistic pasted messaging-app estimate with shorthand units, inconsistent formatting, and an open-ended labour charge.",
+
+  "quote_text": "Estimate for bathroom work\n\n2 nos tap fitting  - 1200/-\nshower  set (with arm)  2800\ncp   angle valve  4nos    @340   = 1360\nwaste coupling 1no  -   450\nteflon , m-seal etc     150\n\nlabour extra as per work\nbreaking and refitting tiles charges extra if needed\n\nabove rate is without gst\nmaterial can be purchased by you also then only labour will be charged\n\npls confirm so that plumber can come tomorrow morning",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "line_items_where", "property": "vague_or_confusing", "value": true, "min_count": 1 },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "The materials are itemized with quantities and unit rates, but labour is entirely unquantified ('labour extra as per work').",
+      "Tile breaking and refitting is a conditional extra with no rate at all.",
+      "GST is excluded, so the quoted figures are not the payable amount.",
+      "There is no total anywhere in the estimate."
+    ],
+    "should_preserve_uncertainty": [
+      "'Labour extra as per work' means the final cost is open-ended; it must not be presented as if a total existed.",
+      "'If needed' on the tile work must stay conditional."
+    ],
+    "must_not_invent": [
+      "A total, a labour rate, or a GST amount. None is given.",
+      "An assumption about which bathroom fittings are being replaced or why."
+    ],
+    "notes": "The materials side of this quote is actually reasonably clear; the labour side is the gap. An output that flags the whole estimate as vague misses the real finding, which is that the itemized half and the open-ended half sit side by side. Note the customer-supplies-materials option, which changes what is being agreed."
+  }
+}

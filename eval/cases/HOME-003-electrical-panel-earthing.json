@@ -1,0 +1,35 @@
+{
+  "case_id": "HOME-003",
+  "domain": "plumbing_home",
+  "categories": ["professional_confirmation_expected", "cross_domain_trap"],
+  "rationale": "Tests that genuinely safety-sensitive domestic electrical work is treated as needing professional confirmation, without importing vehicle or electronics-repair vocabulary.",
+
+  "quote_text": "Hallam Electrical Contractors\nSite: 22 Prescott Gardens, ground floor flat\nQuotation HE-3390\n\nReason for visit: customer reports the residual current device tripping intermittently,\nusually when the immersion heater is on.\n\nProposed works:\n  1. Replace existing consumer unit with an 8-way board to current regulations,\n     including RCBOs on all final circuits.                          Rs. 18,500\n  2. Install a dedicated 20 A radial circuit for the immersion heater,\n     approx. 9 m of 2.5 mm cable, surface trunking.                   Rs.  6,200\n  3. Earth bonding to incoming water and gas services where currently absent.\n                                                                     Rs.  2,400\n  4. Insulation resistance and continuity testing on all circuits,\n     with a certificate issued on completion.                        Rs.  1,800\n  5. Labour, 2 days, 2 operatives.                                   Rs.  9,000\n                                                                     ----------\n  Total before tax                                                   Rs. 37,900\n\nNote: the intermittent trip has not yet been isolated to a specific circuit. Item 1 is\nproposed on the basis of the board's age and the absence of RCBO protection, not as a\nconfirmed fix for the tripping.\n\nPower will be off for most of the first day. Certificate issued on completion.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "needs_professional_confirmation", "expected": true }
+    ],
+    "must_not": [
+      { "check": "forbidden_terms", "termset": "vehicle_domain" }
+    ]
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "The quote itself states the tripping fault has not been isolated, so the board replacement is not a confirmed fix for the reported problem.",
+      "Items 2, 3, and 4 are specified with quantities, ratings, and a deliverable certificate.",
+      "The customer is being asked to approve Rs. 37,900 of work while the original complaint remains undiagnosed."
+    ],
+    "should_preserve_uncertainty": [
+      "The cause of the intermittent trip is explicitly unresolved and must stay that way in the output.",
+      "Whether the new board will stop the tripping is not claimed by the vendor and must not be claimed by QuoteCheck."
+    ],
+    "must_not_invent": [
+      "Any vehicle, mechanic, brake, or tyre framing.",
+      "A safety verdict — neither 'this installation is dangerous' nor 'this can safely wait'. QuoteCheck cannot inspect the property.",
+      "A specific fault (faulty immersion element, damaged cable) that the quote does not identify."
+    ],
+    "notes": "The honesty of this quote is itself notable: the vendor flags that item 1 is not a confirmed fix. A good output credits that rather than treating the whole quote as suspect. Professional confirmation is warranted because domestic electrical work is safety-sensitive and the diagnosis is open — not because the amount is large."
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "Shared forbidden-term sets referenced by name from eval/cases/*.json.",
+    "A case references a termset by name only: {\"check\": \"forbidden_terms\", \"termset\": \"price_judgment\"}.",
+    "The mode lives HERE and only here. Case files must not restate it, and QC-3B must not",
+    "implement per-case termset-mode overrides. Only inline `terms` (a case-specific list with",
+    "no `termset` name) may carry its own mode.",
+    "Matching is case-insensitive whole-word / whole-phrase, never substring.",
+    "See eval/README.md for the full semantics of `mode` and the field scopes."
+  ],
+
+  "price_judgment": {
+    "mode": "absolute",
+    "fields": "analysis_text",
+    "why": "QuoteCheck has no price database and no market benchmarking, so it cannot support any affirmative claim about whether an amount is high, low, or fair. Deliberately HIGH-PRECISION, not comprehensive: see eval/README.md > 'Why the price termset is small'.",
+    "terms": [
+      "quite high",
+      "unusually high",
+      "on the higher side",
+      "seems expensive",
+      "looks expensive",
+      "appears expensive",
+      "seems overpriced",
+      "appears overpriced",
+      "clearly overpriced",
+      "seems inflated",
+      "appears inflated",
+      "competitively priced",
+      "reasonably priced",
+      "above market rate",
+      "below market rate",
+      "good deal",
+      "bad deal",
+      "value for money"
+    ]
+  },
+
+  "vehicle_domain": {
+    "mode": "not_in_source",
+    "fields": "analysis_text",
+    "why": "Guards the REG-001 regression class: a non-vehicle quote must not acquire vehicle/mechanic vocabulary that was never in the customer's text.",
+    "terms": [
+      "mechanic",
+      "vehicle",
+      "car",
+      "automotive",
+      "brake",
+      "tyre",
+      "tire",
+      "odometer"
+    ]
+  },
+
+  "trade_domain": {
+    "mode": "not_in_source",
+    "fields": "analysis_text",
+    "why": "The mirror of vehicle_domain: a quote from one trade must not acquire building/plumbing/contractor vocabulary that was never in the customer's text.",
+    "terms": [
+      "plumber",
+      "plumbing",
+      "contractor",
+      "mason",
+      "electrician",
+      "renovation"
+    ]
+  }
+}

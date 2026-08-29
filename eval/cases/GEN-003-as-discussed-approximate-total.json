@@ -1,0 +1,34 @@
+{
+  "case_id": "GEN-003",
+  "domain": "generic_service",
+  "categories": ["missing_scope_or_quantity"],
+  "rationale": "Tests the extreme low-information case: a quote that externalises all of its content to a conversation and an attachment the analyzer cannot see.",
+
+  "quote_text": "Hello,\n\nFurther to our discussion, please find below the approximate total for the work as\nagreed. Details are in the attachment shared earlier.\n\nApproximate total: Rs. 27,000 (to be confirmed)\n\nHalf on start, half on completion, as discussed on the call.\nLet us know if you would like us to go ahead and we will block the dates.\n\nRegards,\nOperations, Silverline Services",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true },
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "There is no scope in this message at all — no work described, no items, no quantities.",
+      "The substance lives in an attachment and a phone conversation that are not part of this text.",
+      "The total is explicitly approximate and 'to be confirmed'.",
+      "The customer is being asked to commit dates and a 50 percent payment against undefined work."
+    ],
+    "should_preserve_uncertainty": [
+      "Everything here is provisional. The output must not present Rs. 27,000 as a price for anything identifiable."
+    ],
+    "must_not_invent": [
+      "The contents of the attachment or the conversation.",
+      "A type of work, a domain, or a reason for the job.",
+      "A price judgment. With no scope whatsoever, there is nothing an amount could even be assessed against."
+    ],
+    "notes": "The correct output is short and honest: this is not yet a quote a customer can evaluate, and the single useful action is to ask for the details in writing. Padding the report with generic advice to make it look substantial is a failure of rubric dimension 5. This is the one case where a near-empty analysis is the right answer."
+  }
+}

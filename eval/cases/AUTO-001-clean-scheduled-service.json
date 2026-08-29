@@ -1,0 +1,29 @@
+{
+  "case_id": "AUTO-001",
+  "domain": "automotive",
+  "categories": ["clean_itemized", "price_present"],
+  "rationale": "Tests that a fully itemized scheduled service with part numbers, quantities, and a stated reason per line is not flagged into ambiguity.",
+
+  "quote_text": "Fairlane Motor Works - Estimate 8834\nVehicle: 2021 hatchback, 1.2 petrol. Odometer: 60,412 km.\nService: 60,000 km scheduled maintenance, as per manufacturer schedule page 42.\n\nParts:\n  Engine oil 5W-30 fully synthetic, 3.5 L      P/N 90210-A    3.5 L    Rs. 2,940\n  Oil filter                                    P/N 15400-RB   1 no.    Rs.   420\n  Air filter element                            P/N 17220-KC   1 no.    Rs.   680\n  Cabin/pollen filter                           P/N 80292-LM   1 no.    Rs.   590\n  Drain plug washer                             P/N 94109-14   1 no.    Rs.    35\n  Spark plugs, iridium                          P/N 12290-QT   4 nos.   Rs. 2,360\n\nLabour:\n  Scheduled service, 2.0 hours at Rs. 550/hour                          Rs. 1,100\n\nAll six parts above are the items listed for the 60,000 km interval in the\nmanufacturer schedule. Spark plugs fall due at this interval, not earlier.\n\nParts subtotal   Rs. 7,025\nLabour subtotal  Rs. 1,100\nTax at 18%       Rs. 1,462\nTotal            Rs. 9,587\n\nOld parts will be returned to you on request. Parts carry the manufacturer's 12 month\nwarranty. Estimated time in workshop: half a day.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": false },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": false }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Every line is a scheduled-interval item, with the interval and schedule page cited.",
+      "Quantities, part numbers, unit prices, labour rate, and labour hours are all stated."
+    ],
+    "should_preserve_uncertainty": [],
+    "must_not_invent": [
+      "A suggestion that any of these items is an upsell. The quote states they are due at this interval.",
+      "A price judgment on the total, or a claim about whether the Rs. 550/hour labour rate is normal."
+    ],
+    "notes": "The automotive clean case. Spark plugs at a 60,000 km interval are a plausible place for a model to reach for 'possible upsell' framing — the quote pre-empts it by citing the schedule, so doing so anyway is an unsupported inference (rubric dimension 2)."
+  }
+}

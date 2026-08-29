@@ -1,0 +1,35 @@
+{
+  "case_id": "GEN-004",
+  "domain": "generic_service",
+  "categories": ["conditional_work", "price_present"],
+  "rationale": "Tests a service contract where a specified base price sits alongside consumables and inspection-dependent work that are deliberately left open.",
+
+  "quote_text": "Ferngate Equipment Services\nAnnual service contract - quotation FE-2208\nEquipment: 2 nos. commercial water purifier, 50 LPH, installed 2023\n\nContract covers:\n  - 4 preventive maintenance visits per unit per year\n  - Free breakdown attendance within 24 hours on working days\n  - TDS and flow-rate check with readings logged each visit\n\n  Contract charge, per unit per year        Rs. 7,200\n  Units covered                             2\n  Contract total                            Rs. 14,400\n\nNot included in the contract charge:\n  - Filter cartridges and membranes are chargeable at actuals. Replacement frequency\n    depends on feed water quality, which will be assessed at the first visit.\n  - Additional consumables as required during any visit.\n  - Membrane replacement, if required, is subject to inspection. Indicative cost\n    Rs. 4,800 per unit, subject to confirmation of the membrane type fitted.\n  - Any repair arising from voltage fluctuation or misuse is outside the contract.\n\nContract commences on receipt of the contract charge. Consumables billed per visit.\nRates held for the contract year.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": true },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Rs. 14,400 buys the visits and breakdown attendance only; consumables are the open-ended part.",
+      "Cartridge and membrane replacement frequency is genuinely unknown until feed water quality is assessed, so the annual running cost cannot be determined from this quote.",
+      "The Rs. 4,800 membrane figure is indicative and conditional on the membrane type fitted.",
+      "Exclusions for voltage fluctuation and misuse shift some risk to the customer."
+    ],
+    "should_preserve_uncertainty": [
+      "'Subject to inspection', 'at actuals', 'as required', and 'indicative' must all survive as open items.",
+      "The total annual cost of ownership is not stated and cannot be derived."
+    ],
+    "must_not_invent": [
+      "An estimated consumables cost or replacement frequency. The quote deliberately does not give one.",
+      "A price judgment on the Rs. 7,200 per unit contract charge.",
+      "An assumption about feed water quality at this site."
+    ],
+    "notes": "The useful vendor question here is what the consumables realistically cost per year for similar installations - a question about the quote's own gap, not a market comparison. The distinction between asking for a missing basis and judging an amount is the same one REG-002 guards."
+  }
+}

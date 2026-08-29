@@ -1,0 +1,29 @@
+{
+  "case_id": "HVAC-001",
+  "domain": "hvac_appliance",
+  "categories": ["clean_itemized"],
+  "rationale": "Tests that a genuinely complete appliance-service contract is not flagged into ambiguity; QuoteCheck is built to find unclear charges, so manufacturing them is its most likely systematic failure.",
+
+  "quote_text": "Meridian Appliance Care - Annual Maintenance Contract 2026\nCustomer: Flat 11B, Lakeview Apartments\nContract period: 01 April 2026 to 31 March 2027\n\nCovered units:\n  Unit A - 1.5 ton split AC, bedroom (serial MAC-99120)\n  Unit B - 1.0 ton split AC, study (serial MAC-99121)\n\nIncluded per unit, 3 visits per year (April, September, January):\n  - Indoor coil and blower wheel cleaning (chemical wash on the April visit only)\n  - Outdoor condenser coil cleaning and fin comb\n  - Filter wash and refit\n  - Drain line flush and pan check\n  - Gas pressure check with reading recorded on the service sheet\n  - Electrical check: capacitor, contactor, and terminal tightness\n\nCharges:\n  AMC per unit, per year               Rs. 3,200\n  Number of units                              2\n  Contract total                       Rs. 6,400\n\nNot included, chargeable separately at the rates below if required:\n  - Refrigerant top-up, Rs. 1,900 per unit\n  - Spare parts at printed MRP, quoted for approval before fitting\n\nBreakdown visits during the contract period are unlimited and free of visit charge.\nCancellation: pro-rata refund of unused visits within the first 6 months.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": false },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": false }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "What the AMC covers per visit and how many visits are included.",
+      "The exclusions are stated with rates, so the customer knows what would be charged extra."
+    ],
+    "should_preserve_uncertainty": [],
+    "must_not_invent": [
+      "An ambiguity that is not present. Scope, quantities, frequency, rates, and exclusions are all stated.",
+      "A recommendation to demand an itemized breakdown that the quote already provides."
+    ],
+    "notes": "The correct output here is calm. Every domain in the corpus carries one case like this. Demo mode will fail the ambiguous_items_present assertion because stub_analyzer.py hardcodes that marker to true — a known, documented gap that this case deliberately surfaces rather than accommodates."
+  }
+}

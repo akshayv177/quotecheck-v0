@@ -1,0 +1,35 @@
+{
+  "case_id": "REG-001",
+  "domain": "hvac_appliance",
+  "categories": ["cross_domain_trap", "professional_confirmation_expected"],
+  "rationale": "Permanent regression guard: an HVAC quote must not acquire vehicle or mechanic vocabulary that was never in the customer's text.",
+  "regression_origin": "TASK-012 — an AC/HVAC quote produced vehicle-oriented output: the old missing_vehicle_context marker was set true on a non-vehicle quote, and the disclaimer named a mechanic. QC-1B replaced that field with the domain-neutral missing_quote_context, so this case guards the leakage behaviour rather than the deleted field name.",
+
+  "quote_text": "Northwind Climate Services - Service Estimate NW-2291\n\nUnit: 1.5 ton split air conditioner (indoor + outdoor), installed 2019.\nCustomer complaint: reduced cooling over the last three weeks, outdoor unit running\ncontinuously.\n\nTechnician findings on site visit: compressor drawing 14.2 A on start against a rated\n8.6 A, suction line warm to touch, low-side pressure 42 psi against a specified 68-72 psi.\nSoap test showed bubbling at the outdoor service valve joint.\n\nRecommended work:\n1. Compressor replacement (rotary, matched to unit tonnage), including brazing and full\n   system evacuation.\n2. Repair of the leaking service valve joint.\n3. Refrigerant recharge to rated capacity after leak check is re-run.\n4. Replacement of the filter drier (mandatory when the sealed system is opened).\n\nWarranty on replaced compressor: 12 months from date of fitting, parts only. Labour on\nany warranty claim is chargeable.\nWork can be scheduled within 3 working days of approval.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "needs_professional_confirmation", "expected": true },
+      { "check": "line_items_where", "property": "evidence_needed_nonempty", "value": true, "min_count": 1 }
+    ],
+    "must_not": [
+      { "check": "forbidden_terms", "termset": "vehicle_domain" }
+    ]
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Compressor replacement is the major cost and the central recommendation.",
+      "The filter drier replacement is standard practice when a sealed refrigerant system is opened, not an add-on.",
+      "The warranty is parts-only, so a warranty claim would still incur labour charges."
+    ],
+    "should_preserve_uncertainty": [
+      "The leak was located by soap test at one joint; whether that is the only leak is not established until the recharge leak check is re-run."
+    ],
+    "must_not_invent": [
+      "Any vehicle, automotive, mechanic, brake, or tyre framing — this is a room air conditioner.",
+      "A verdict on whether replacing the compressor is better value than replacing the unit; the quote offers no basis for that comparison."
+    ],
+    "notes": "Refrigerant handling and sealed-system work are technical and regulated, so recommending confirmation by a qualified HVAC technician is appropriate here — but the disclaimer must name an HVAC-appropriate professional, never a mechanic. Rubric dimension 6 covers whether the wording lands correctly; the deterministic check only proves vehicle words were not invented."
+  }
+}

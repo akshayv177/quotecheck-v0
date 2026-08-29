@@ -1,0 +1,32 @@
+{
+  "case_id": "HVAC-002",
+  "domain": "hvac_appliance",
+  "categories": ["vague_bundled_charge"],
+  "rationale": "Tests that generically named service, handling, and materials charges are surfaced individually rather than absorbed into a total.",
+
+  "quote_text": "Sunview Home Appliances\nJob card 7712 - Washing machine, front load, 7 kg\n\nCustomer complaint: drum not spinning, error code shown on display.\n\nWork proposed:\n  Drain pump assembly replacement           Rs. 2,650\n  Door lock switch replacement              Rs. 1,180\n  Service handling                          Rs.   950\n  Materials as required                     Rs.   600\n  Site charges                              Rs.   350\n  Technician visit                          Rs.   400\n                                            ---------\n  Total                                     Rs. 6,130\n\nParts warranty 3 months. Service warranty 30 days on the same complaint.\nApproval by reply message is sufficient to proceed.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "line_items_where", "property": "vague_or_confusing", "value": true, "min_count": 1 },
+      { "check": "line_items_where", "property": "evidence_needed_nonempty", "value": true, "min_count": 1 }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "'Service handling', 'materials as required', and 'site charges' are three separate charges with no stated content.",
+      "'Site charges' and 'technician visit' may overlap; the quote does not say whether they are distinct.",
+      "The two named part replacements are specific and explainable; the vague charges are the ones needing clarification."
+    ],
+    "should_preserve_uncertainty": [
+      "'Materials as required' is open-ended — the quoted Rs. 600 may be an estimate rather than a cap, and the quote does not say which."
+    ],
+    "must_not_invent": [
+      "A guess at what 'service handling' covers, stated as fact.",
+      "An assertion that these charges are padding or that the vendor is upselling."
+    ],
+    "notes": "The error code is mentioned but not given, which is a real gap worth a vendor question. A good output distinguishes the two clear part lines from the three unclear ones rather than flagging the whole quote uniformly."
+  }
+}

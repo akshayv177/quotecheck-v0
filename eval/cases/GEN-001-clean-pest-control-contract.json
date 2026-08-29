@@ -1,0 +1,32 @@
+{
+  "case_id": "GEN-001",
+  "domain": "generic_service",
+  "categories": ["clean_itemized", "price_present", "professional_confirmation_not_expected"],
+  "rationale": "Tests a complete, low-risk recurring service contract outside any technical trade: it should be neither flagged as ambiguous nor escalated for professional confirmation.",
+
+  "quote_text": "Thornbury Pest Management\nService Agreement TP-4417\nPremises: 1,180 sq ft flat, 2nd floor\nAgreement period: 12 months from date of first treatment\n\nIncluded treatments:\n  1. General disinfestation (cockroach gel and spray), 4 visits, one per quarter\n  2. Ant treatment, included in each quarterly visit\n  3. Rodent monitoring stations, 4 stations, checked and rebaited each visit\n\nChemicals used: gel bait and residual spray, both on the approved list; safety data\nsheets provided on request. Treated areas require 4 hours ventilation before reoccupation.\n\nCharges:\n  Quarterly visit                       Rs. 1,450 per visit\n  Number of visits                      4\n  Rodent station setup, one time        Rs.   800\n                                        ----------\n  Annual total                          Rs. 6,600\n\nCallbacks between scheduled visits are free of charge if activity recurs within\n30 days of a treatment.\nNot covered: termite treatment, bed bug treatment, and fumigation, each quoted\nseparately on inspection.\nPayment quarterly in arrears after each visit. No advance.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": false },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": false },
+      { "check": "uncertainty_marker", "marker": "needs_professional_confirmation", "expected": false }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Visit frequency, treatment types, station count, per-visit rate, and the annual total are all stated.",
+      "Exclusions (termite, bed bug, fumigation) are named, so the customer knows the boundary of the agreement.",
+      "Payment is in arrears with no advance, and callbacks are free within 30 days."
+    ],
+    "should_preserve_uncertainty": [],
+    "must_not_invent": [
+      "A gap in scope. Coverage, exclusions, frequency, and price are all specified.",
+      "A safety concern about the chemicals. The quote names the categories, states they are on the approved list, offers safety data sheets, and gives a ventilation period.",
+      "A price judgment on Rs. 6,600."
+    ],
+    "notes": "The generic_service clean case. It also tests that mentioning chemicals and a ventilation period does not by itself trigger a professional-confirmation escalation; the quote already handles the safety information a customer needs."
+  }
+}

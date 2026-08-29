@@ -1,0 +1,34 @@
+{
+  "case_id": "AUTO-004",
+  "domain": "automotive",
+  "categories": ["professional_confirmation_expected", "missing_scope_or_quantity"],
+  "rationale": "Tests handling of safety-relevant work recommended from a symptom alone, with no measurement, test result, or confirmed root cause.",
+
+  "quote_text": "Torrance Auto Centre\nEstimate for: 2016 estate, 132,000 km\n\nCustomer reports a knocking noise from the front end over bumps.\n\nRecommend replacing both front lower control arms complete with bushings and ball\njoints, plus a four wheel alignment afterwards.\n\n  Lower control arm assembly, front, pair      Rs. 14,800\n  Alignment                                    Rs.  1,500\n  Labour                                       Rs.  4,000\n  Total                                        Rs. 20,300\n\nParts are aftermarket equivalent. Alignment is required after this work.\nBooking available from Thursday.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "needs_professional_confirmation", "expected": true },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "A knocking noise over bumps is a symptom with several possible sources (links, bushings, struts, ball joints); the quote names one without showing how it was isolated.",
+      "No inspection finding, play measurement, or road-test result is given.",
+      "Both arms are being replaced, but the quote does not say whether both were found faulty or whether this is replace-in-pairs practice.",
+      "The parts are aftermarket, with no warranty term stated."
+    ],
+    "should_preserve_uncertainty": [
+      "The cause of the noise is not established by this quote, only proposed."
+    ],
+    "must_not_invent": [
+      "A confirmation that the control arms are worn. Nothing in the quote establishes that.",
+      "A safety determination in either direction — neither 'this is unsafe to drive' nor 'this can wait'.",
+      "A price judgment on Rs. 20,300."
+    ],
+    "notes": "Steering and suspension components are safety-relevant and the root cause is unconfirmed, so recommending confirmation by a qualified professional (a second opinion, or evidence of the play found) is the correct call here. Contrast with HVAC-003 and ELEC-004, where the same escalation would be reflexive noise."
+  }
+}

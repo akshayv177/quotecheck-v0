@@ -1,0 +1,34 @@
+{
+  "case_id": "HOME-002",
+  "domain": "plumbing_home",
+  "categories": ["missing_scope_or_quantity"],
+  "rationale": "Tests recognition of a quote with a price but effectively no scope, quantity, or diagnostic basis behind it.",
+
+  "quote_text": "Delton Maintenance Services\n\nQuote reference: verbal site visit, kitchen area.\n\nWater leak repair - plumbing work as required.\nMaterials extra at actual.\n\nCharge: Rs. 8,500\n\nWork to commence on receipt of advance. Balance on completion.\nContact: Delton Maintenance, 10am to 7pm.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true },
+      { "check": "line_items_where", "property": "vague_or_confusing", "value": true, "min_count": 1 }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "'Plumbing work as required' is not a scope — nothing states what will actually be done.",
+      "'Materials extra at actual' means the Rs. 8,500 is not the final cost, and no cap or estimate is given.",
+      "No source of the leak, no inspection finding, and no measurement appear anywhere.",
+      "An advance is requested against undefined work."
+    ],
+    "should_preserve_uncertainty": [
+      "Whether Rs. 8,500 is labour only, or labour plus some materials, is not stated.",
+      "The extent of the leak and what repairing it involves is entirely undetermined by this text."
+    ],
+    "must_not_invent": [
+      "A likely cause of the leak, a pipe type, or a repair method. The quote supports none of these.",
+      "A price judgment on Rs. 8,500 — with no scope at all, there is nothing to judge it against even in principle."
+    ],
+    "notes": "This case is the clearest instance of the allowed/forbidden price boundary: 'we cannot tell what this Rs. 8,500 buys' is the correct observation; 'this is high for a leak repair' is the forbidden one. Note the vendor is not accused of anything — thin quotes are common and often honest."
+  }
+}

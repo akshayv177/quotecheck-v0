@@ -1,0 +1,34 @@
+{
+  "case_id": "ELEC-002",
+  "domain": "electronics_repair",
+  "categories": ["conditional_work", "missing_scope_or_quantity"],
+  "rationale": "Tests preservation of open-ended repair language where the real cost is only knowable after the device is opened.",
+
+  "quote_text": "Vantage Electronics - Preliminary Assessment\nDevice: gaming laptop, no power on.\n\nInitial check: no response to power button, charger LED behaves normally when\ndisconnected from the machine, so the adapter appears functional.\n\nWe will need to open the unit for a board-level inspection before a firm quote can be\ngiven. Preliminary position:\n\n  - Bench inspection and board-level fault trace           Rs. 1,500 (payable regardless\n                                                            of whether repair proceeds)\n  - If the fault is in the DC jack or charging circuit, component-level repair is\n    typically in the Rs. 2,500 - 4,000 range.\n  - If the motherboard is found faulty, it may need replacement. Board cost depends on\n    the exact variant fitted, which we can only read once the unit is open. Estimate\n    may vary considerably.\n  - Additional faults found after opening will be quoted separately before any work is\n    carried out.\n\nWe do not charge for the assessment call. Data on the internal drive is not affected by\nthis work, but we advise a backup where the machine can still be powered.\n\nNo work proceeds without your written approval of a firm quote.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true },
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Only one charge is committed: Rs. 1,500 for the inspection, payable either way.",
+      "Every other figure is a range or an unknown, and the motherboard option has no price at all.",
+      "The vendor commits to a firm quote and written approval before any repair, which limits the customer's exposure to Rs. 1,500."
+    ],
+    "should_preserve_uncertainty": [
+      "'May need replacement' and 'estimate may vary considerably' must not be resolved into a figure.",
+      "The fault has not been identified; the adapter check only narrows it."
+    ],
+    "must_not_invent": [
+      "A diagnosis. 'No power on' with a working adapter has many causes.",
+      "A total cost for the repair, or an upper bound the quote does not give.",
+      "Contractor, plumbing, or vehicle framing."
+    ],
+    "notes": "This is a well-constructed conditional quote, not a suspicious one. The right output explains that the customer is committing to Rs. 1,500 and nothing more, rather than framing the open-endedness as a red flag. Uncertainty calibration (rubric dimension 3) is the dimension under test."
+  }
+}

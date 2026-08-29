@@ -1,0 +1,35 @@
+{
+  "case_id": "CONT-002",
+  "domain": "contractor_vendor",
+  "categories": ["vague_bundled_charge", "missing_scope_or_quantity"],
+  "rationale": "Tests a lump-sum contractor quote built almost entirely from open-ended category headings with no quantities or unit rates.",
+
+  "quote_text": "Camberwell Builders & Co.\nEstimate for interior work - 2 BHK\n\n  Civil work                                        Rs.  85,000\n  Materials as required                             Rs.  60,000\n  Additional work                                   Rs.  25,000\n  Other charges                                     Rs.  15,000\n  Supervision                                       Rs.  20,000\n                                                    -----------\n  Lump sum                                          Rs. 205,000\n\nAbove is a consolidated figure. Detailed breakup can be shared later if required.\nRates are subject to site conditions.\nAdvance 40 percent, running payments as work progresses.\n\nWork will start within a week of confirmation.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "line_items_where", "property": "vague_or_confusing", "value": true, "min_count": 1 },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "'Civil work', 'materials as required', 'additional work', and 'other charges' are category headings, not scope — none says what will be done.",
+      "'Additional work Rs. 25,000' prices work that has not been described at all.",
+      "No quantities, unit rates, or measurements appear anywhere.",
+      "'Rates are subject to site conditions' means even the lump sum is not fixed."
+    ],
+    "should_preserve_uncertainty": [
+      "The Rs. 205,000 is not a firm price; the quote says rates may change.",
+      "'Running payments as work progresses' has no milestones attached to it."
+    ],
+    "must_not_invent": [
+      "A guess at what the civil work involves — flooring, walls, waterproofing, or anything else.",
+      "An accusation that the contractor is concealing scope. A consolidated estimate is common practice; what matters is that the customer cannot evaluate it as written.",
+      "A price judgment on Rs. 205,000."
+    ],
+    "notes": "The most severe vague-charge case in the corpus: nearly every line is unspecified, and the quote itself offers a breakup on request. The single most useful output here is to ask for that breakup before any advance is paid."
+  }
+}

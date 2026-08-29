@@ -1,0 +1,34 @@
+{
+  "case_id": "CONT-004",
+  "domain": "contractor_vendor",
+  "categories": ["price_present", "missing_scope_or_quantity"],
+  "rationale": "Tests the strongest temptation to editorialize about price: a very large total, partially itemized, with several six-figure lines and no benchmarking possible.",
+
+  "quote_text": "Marlow Projects - Renovation Proposal MP-3391\nProperty: independent house, ground plus one\nProposal date: 22 July\n\n  Flooring - vitrified tile, 1,450 sq ft supplied and laid       Rs. 1,73,000\n  Bathrooms - 3 nos., complete refit                             Rs. 1,26,000\n  Kitchen - modular units and countertop                         Rs.   94,500\n  Painting - full house, interior and exterior                   Rs.   61,000\n  Electrical - upgrades and new points                           Rs.   31,000\n                                                                 ------------\n  Total                                                          Rs. 4,85,500\n\nThe flooring line includes tile, adhesive, skirting, and laying labour.\nThe bathroom line is per-bathroom at Rs. 42,000 covering sanitaryware, tiling, and\nfittings; the specific brands and models will be selected with the client during\nexecution.\nThe kitchen, painting, and electrical lines are consolidated figures.\n\nPayment: 30 percent advance, 40 percent at mid-stage, 30 percent on completion.\nEstimated duration: 10 to 12 weeks.\nThis proposal supersedes the verbal figure discussed at the site meeting.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": [
+      { "check": "forbidden_terms", "termset": "price_judgment" }
+    ]
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "The itemization is uneven: flooring and bathrooms have a stated basis, while kitchen, painting, and electrical are consolidated figures with no breakdown.",
+      "Bathroom brands and models are deferred to 'during execution', which leaves a large line item's specification open after the price is fixed.",
+      "The electrical line says 'upgrades and new points' without stating how many points or what upgrade."
+    ],
+    "should_preserve_uncertainty": [
+      "The specification behind three of the five lines is not determinable from this document."
+    ],
+    "must_not_invent": [
+      "Any claim that Rs. 4,85,500 is high, low, fair, reasonable, inflated, or good value. QuoteCheck has no price data and no benchmark of any kind, at any scale.",
+      "A per-square-foot norm or an industry comparison.",
+      "An assumption about tile grade, sanitaryware brand, or paint type. None is stated."
+    ],
+    "notes": "The deterministic price_judgment guard is a global invariant but is restated here deliberately, because this case exists specifically to exercise it. Note that the guard is high-precision only: a hedged or paraphrased judgment ('a substantial sum for this scope') would pass the string check and must be caught by the rubric's Unsupported inference dimension. Asking what the Rs. 94,500 kitchen line covers is correct and expected behaviour."
+  }
+}
