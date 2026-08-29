@@ -1,0 +1,30 @@
+{
+  "case_id": "ELEC-001",
+  "domain": "electronics_repair",
+  "categories": ["clean_itemized", "price_present"],
+  "rationale": "Tests that a complete electronics repair quote with a stated diagnostic result, part number, and warranty is not flagged into ambiguity.",
+
+  "quote_text": "Pinecrest Device Repair - Job 5521\nDevice: 14-inch laptop, model NX-4400, serial NX44-0099817\nReceived: 03 June. Diagnosed by: bench technician T. Aluru.\n\nCustomer complaint: screen shows vertical coloured lines across the left third of the\ndisplay; image otherwise intact.\n\nDiagnostic result: external monitor output over HDMI is clean at 1080p, which places\nthe fault in the panel or its ribbon connector rather than the graphics chip. Ribbon\nreseated on the bench, lines persisted. Panel confirmed faulty.\n\nQuoted repair:\n  LCD panel assembly, 14\" FHD matte, part N140HCA-EAC, 1 no.        Rs. 7,900\n  Bench labour, panel replacement, 1 hour                           Rs. 1,200\n  Data handling and post-repair display test                        included\n                                                                    ---------\n  Total                                                             Rs. 9,100\n\nPanel carries a 6 month warranty covering dead pixels, backlight failure, and line\ndefects. Warranty excludes physical damage after collection.\nTurnaround: 2 working days from approval, subject to panel stock (in stock as of today).\nNo charge if you decline the repair; the diagnostic was free.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": false },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": false }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "The diagnostic reasoning is shown: a clean external output rules out the graphics chip, and reseating the ribbon ruled out the connector.",
+      "The exact panel part number, warranty terms and exclusions, and turnaround are all stated.",
+      "There is no charge for declining, which is worth telling the customer."
+    ],
+    "should_preserve_uncertainty": [],
+    "must_not_invent": [
+      "A doubt about the diagnosis. The quote shows its working; manufacturing suspicion here is unsupported inference.",
+      "A price judgment on Rs. 9,100 or on the panel cost."
+    ],
+    "notes": "The electronics_repair clean case. Demo mode has no electronics keywords at all, so this quote falls through the stub's fallback path — the resulting failures are a real coverage gap in the Demo analyzer, documented in docs/CURRENT_STATE.md, not a defect in the case."
+  }
+}

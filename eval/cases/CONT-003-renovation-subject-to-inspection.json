@@ -1,0 +1,36 @@
+{
+  "case_id": "CONT-003",
+  "domain": "contractor_vendor",
+  "categories": ["conditional_work"],
+  "rationale": "Tests preservation of a renovation quote's conditional framing, where a substantial part of the cost depends on what is found after opening up the structure.",
+
+  "quote_text": "Alder & Vane Renovation\nProposal AV-771 - false ceiling replacement and rewiring, living and dining area\n\nApproximate area: 420 sq ft.\n\nQuoted on current visible condition:\n  Removal and disposal of existing gypsum false ceiling      Rs.  16,800\n  New gypsum ceiling with concealed lighting provision,\n    420 sq ft at Rs. 95 per sq ft                            Rs.  39,900\n  Rewiring for 14 light points and 2 fan points              Rs.  22,400\n  Painting, 2 coats                                          Rs.  14,000\n                                                             -----------\n  Indicative total                                           Rs.  93,100\n\nConditions:\n  - Final cost is subject to a site inspection once the existing ceiling is opened.\n  - Any additional work required after opening (damaged conduit, damp in the slab,\n    concealed leakage from the floor above) will be assessed and quoted at that stage.\n  - The estimate may vary by approximately 10 to 15 percent either way depending on\n    what is found.\n  - If the existing wiring is found to be non-standard, rewiring cost will be revised.\n\nWe will photograph the opened ceiling and share images before proceeding with any\nadditional work.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": true },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "The four quoted lines have real quantities and rates, so the visible-condition part of the quote is specific.",
+      "The uncertainty is structural, not clerical: it comes from work that cannot be assessed until the ceiling is opened.",
+      "The 10 to 15 percent variance is stated, giving the customer a rough exposure range.",
+      "The vendor commits to photographing the opened ceiling before extra work, which is a usable checkpoint."
+    ],
+    "should_preserve_uncertainty": [
+      "'Indicative total' must not be reported as a final price.",
+      "The additional-work items are named as possibilities, not as expected findings.",
+      "Rewiring cost is explicitly revisable."
+    ],
+    "must_not_invent": [
+      "A prediction that damp or leakage will be found. The quote lists them as contingencies.",
+      "A firm upper bound beyond the stated 10 to 15 percent.",
+      "A price judgment on the rate of Rs. 95 per sq ft."
+    ],
+    "notes": "Contrast with CONT-002: both quotes are open-ended, but this one is open-ended for a defensible reason and says so with numbers. An output that treats the two identically has failed uncertainty calibration (rubric dimension 3)."
+  }
+}

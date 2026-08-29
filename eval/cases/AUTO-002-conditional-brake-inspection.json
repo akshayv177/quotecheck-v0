@@ -1,0 +1,34 @@
+{
+  "case_id": "AUTO-002",
+  "domain": "automotive",
+  "categories": ["conditional_work", "missing_scope_or_quantity"],
+  "rationale": "Tests that hedged source language ('may need', 'subject to inspection', 'if required') survives into the output as uncertainty rather than being resolved into settled work.",
+
+  "quote_text": "Kestrel Auto Service - Provisional Estimate\nVehicle: 2018 sedan. In for a reported grinding sound when braking at low speed.\n\nProvisional items:\n  - Front brake pads may need replacement, subject to inspection once the wheels are\n    off. Approx. Rs. 4,200 if required.\n  - Front discs to be assessed after pad removal. Skimming or replacement will be\n    advised at that point. Skim approx. Rs. 1,600 per pair; replacement quoted\n    separately if the discs are below minimum thickness.\n  - Rear brakes to be checked. No charge for the check.\n  - Brake fluid may be due depending on its condition and last change date, which is\n    not in our records for this vehicle.\n\nAdditional work found during the strip-down will be advised by phone before proceeding.\nNo work beyond the inspection will be carried out without your approval.\n\nThis is a provisional figure only. A firm estimate follows the inspection.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true },
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Nothing here is confirmed work; every item is contingent on an inspection that has not happened yet.",
+      "The disc decision (skim vs. replace) depends on a minimum-thickness measurement that has not been taken.",
+      "The workshop commits to calling before any additional work, which is a customer protection worth noting."
+    ],
+    "should_preserve_uncertainty": [
+      "'May need replacement' must not become 'needs replacement'.",
+      "'Approx. Rs. 4,200 if required' must not be reported as a firm charge.",
+      "Disc replacement has no price at all in this quote."
+    ],
+    "must_not_invent": [
+      "A diagnosis. A grinding sound is a symptom; the quote does not establish worn pads as the cause.",
+      "A total for the job. The quote deliberately does not give one."
+    ],
+    "notes": "The failure mode this case targets is the opposite of over-flagging: collapsing conditional language into certainty so the report reads cleaner than the quote justifies. Brake work is safety-relevant, so recommending professional confirmation is appropriate — but the quote already schedules an inspection, so the output should not imply the customer is being asked to approve brake work sight-unseen."
+  }
+}

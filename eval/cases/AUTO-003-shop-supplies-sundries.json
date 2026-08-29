@@ -1,0 +1,32 @@
+{
+  "case_id": "AUTO-003",
+  "domain": "automotive",
+  "categories": ["vague_bundled_charge", "price_present"],
+  "rationale": "Tests that bundled workshop charges are surfaced alongside clear line items, without the clear items being dragged into the same flag.",
+
+  "quote_text": "Halewood Garage - Invoice Estimate 20455\nVehicle: 2017 SUV, 84,300 km\n\n  Front wiper blades, pair                                       Rs.   980\n  Battery, 65 Ah, replacement (old unit tested at 9.8 V under load) Rs. 6,400\n  Coolant top-up, 1 L                                            Rs.   310\n  Labour, 1.5 hrs                                                Rs.   825\n  Shop supplies                                                  Rs.   450\n  Sundries                                                       Rs.   275\n  Labour adjustment                                              Rs.   300\n  Environmental levy                                             Rs.   150\n                                                                 ---------\n  Subtotal                                                       Rs. 9,690\n  Tax                                                            Rs. 1,744\n  Total                                                          Rs. 11,434\n\nBattery carries 24 month pro-rata warranty. Old battery to be surrendered.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "line_items_where", "property": "vague_or_confusing", "value": true, "min_count": 1 },
+      { "check": "line_items_where", "property": "evidence_needed_nonempty", "value": true, "min_count": 1 }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "'Shop supplies', 'sundries', and 'labour adjustment' are three unexplained charges totalling Rs. 1,025.",
+      "'Labour adjustment' sits next to a stated 1.5 hrs labour line, and the quote does not say what it adjusts.",
+      "The battery replacement is well supported — a load-test reading of 9.8 V is given."
+    ],
+    "should_preserve_uncertainty": [
+      "Whether 'environmental levy' is a statutory charge or a workshop charge is not stated."
+    ],
+    "must_not_invent": [
+      "A claim that the bundled charges are padding, or an accusation about the workshop's intent.",
+      "A price judgment on the total or on any individual line."
+    ],
+    "notes": "The discrimination test: a good output flags the three unexplained charges and leaves the battery line alone, because that line already carries its evidence. Flagging everything uniformly is a failure of rubric dimension 4 and 5 even though the deterministic checks would still pass."
+  }
+}

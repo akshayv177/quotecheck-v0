@@ -1,0 +1,32 @@
+{
+  "case_id": "ELEC-004",
+  "domain": "electronics_repair",
+  "categories": ["price_present", "professional_confirmation_not_expected"],
+  "rationale": "Tests that a benign, well-evidenced repair carrying a large-looking amount attracts neither a price judgment nor reflexive escalation to a professional.",
+
+  "quote_text": "Northgate Computer Services\nQuotation NG-2044\nDevice: ultrabook, model ZB-13, purchased March 2022 (out of warranty)\n\nCustomer complaint: battery runs down in under 90 minutes and the machine shuts off\nwithout warning at around 20 percent indicated charge.\n\nBattery health report from the system diagnostic, run in front of the customer:\n  Design capacity      52.4 Wh\n  Full charge capacity 32.6 Wh  (62 percent of design)\n  Cycle count          884\n\nQuoted work:\n  Replacement battery, manufacturer original, part ZB13-BT-52   Rs. 12,400\n  Fitting and calibration cycle                                 Rs.  1,100\n  Disposal of old lithium battery per local regulations         Rs.    150\n                                                                ----------\n  Total                                                         Rs. 13,650\n\nBattery carries 12 months warranty. Original part; compatible alternatives are\navailable at lower cost but we do not fit them in this model owing to past swelling\nreports.\n\nMachine ready the same day. No advance required.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "needs_professional_confirmation", "expected": false }
+    ],
+    "must_not": [
+      { "check": "forbidden_terms", "termset": "price_judgment" }
+    ]
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "The recommendation is backed by a measured diagnostic: 62 percent of design capacity and 884 cycles.",
+      "The vendor explains why it declines to fit cheaper compatible parts in this model.",
+      "The battery is original with a 12 month warranty, and the device is out of manufacturer warranty."
+    ],
+    "should_preserve_uncertainty": [],
+    "must_not_invent": [
+      "Any judgment that Rs. 13,650 is high, expensive, or poor value, however large the number looks against the repair.",
+      "A safety escalation. Fitting a manufacturer battery on the bench does not need independent professional confirmation.",
+      "A suspicion that the vendor is steering the customer to an expensive part; the quote gives a stated reason."
+    ],
+    "notes": "This is the strongest single test of the price boundary against a genuinely benign quote: the amount is large, the evidence is complete, and there is nothing to flag. The only legitimate observations concern what is not stated — for example whether the swelling reports refer to this model specifically. A model that finds a problem here is manufacturing one."
+  }
+}

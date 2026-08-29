@@ -1,0 +1,31 @@
+{
+  "case_id": "HOME-001",
+  "domain": "plumbing_home",
+  "categories": ["clean_itemized", "price_present", "professional_confirmation_not_expected"],
+  "rationale": "Tests that a complete, low-risk plumbing job is neither flagged into ambiguity nor escalated to professional confirmation it does not need.",
+
+  "quote_text": "Brookfield Plumbing - Quotation BP-1187\nProperty: 4 Ashcombe Row\nDate of survey: 09 May. Surveyed by: R. Fenton.\n\nWork requested by customer: dripping basin tap in the main bathroom, and a stiff\nisolation valve under the same basin.\n\nSurvey findings: basin mixer cartridge worn, tap body pitted at the base. Isolation\nvalve seized in the open position.\n\nQuoted work:\n  1. Supply and fit Ravensworth RX2 basin mixer tap, chrome, 1 no.        Rs. 3,400\n     (Customer may supply their own tap; deduct Rs. 3,400 if so.)\n  2. Supply and fit 15 mm compression isolation valve, 1 no.              Rs.   280\n  3. Flexible tap connectors, 15 mm x 300 mm, 2 nos.                      Rs.   240\n  4. Labour, 1 hour 30 minutes at Rs. 700 per hour                        Rs. 1,050\n                                                                          ---------\n  Total                                                                   Rs. 4,970\n\nWater will be off to the bathroom for approximately 45 minutes.\nTap carries a 5 year manufacturer warranty on the cartridge; our workmanship is\nwarranted for 12 months.\nQuotation valid 30 days. No advance payment required.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": false },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": false },
+      { "check": "uncertainty_marker", "marker": "needs_professional_confirmation", "expected": false }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "A survey was carried out and the findings are stated, so each item has a reason attached.",
+      "The customer-supplied-tap option and its exact deduction are stated, which is unusually clear.",
+      "Quantities, sizes, unit prices, labour rate and duration, warranties, and validity are all present."
+    ],
+    "should_preserve_uncertainty": [],
+    "must_not_invent": [
+      "Hidden charges, missing scope, or a need for further diagnosis. None is present.",
+      "A recommendation to have this checked by another professional. It is a routine tap and valve swap, fully specified and surveyed."
+    ],
+    "notes": "The plumbing_home clean case, and one of the three professional_confirmation_not_expected cases. A model that escalates this quote is producing noise, not caution (rubric dimension 6)."
+  }
+}

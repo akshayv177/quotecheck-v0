@@ -1,0 +1,35 @@
+{
+  "case_id": "ELEC-003",
+  "domain": "electronics_repair",
+  "categories": ["cross_domain_trap", "vague_bundled_charge"],
+  "rationale": "Tests that a small electronics repair with generic service charges is not described using building-trade or vehicle vocabulary borrowed from other domains.",
+
+  "quote_text": "QuickFix Mobile Care\nEstimate - smartphone, 6.1 inch display\n\nComplaint: charging port loose, phone charges only when the cable is held at an angle.\n\n  Charging port flex replacement (compatible part)     Rs. 1,650\n  Service charge                                       Rs.   400\n  Handling                                             Rs.   200\n                                                       ---------\n  Total                                                Rs. 2,250\n\nCompatible part, not original. Warranty 30 days on the port only.\nPhone must be left for 2-3 hours. Water resistance, if present, is not retained after\nthe device is opened.\n\nNote: if the port is found to be fine and the fault is on the board, the estimate will\nchange and we will inform you first.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "line_items_where", "property": "vague_or_confusing", "value": true, "min_count": 1 }
+    ],
+    "must_not": [
+      { "check": "forbidden_terms", "termset": "trade_domain" },
+      { "check": "forbidden_terms", "termset": "vehicle_domain" }
+    ]
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "'Service charge' and 'handling' total Rs. 600 with no stated content, alongside a clearly named part.",
+      "The part is compatible rather than original, with only a 30 day warranty limited to the port.",
+      "Loss of water resistance after opening is a real consequence the customer should weigh."
+    ],
+    "should_preserve_uncertainty": [
+      "The vendor states the port diagnosis may be wrong and the estimate would change; that conditional must survive."
+    ],
+    "must_not_invent": [
+      "Plumbing, contractor, mason, electrician, or renovation vocabulary — the words 'service charge' and 'handling' are generic and must not pull in building-trade framing.",
+      "Vehicle or mechanic framing.",
+      "A claim that Rs. 400 plus Rs. 200 is excessive; the correct observation is that their content is unstated."
+    ],
+    "notes": "The trap is lexical: 'service charge', 'handling', and 'flex' are generic enough that a model with domain priors can drift toward a trade it recognises. The deterministic guard only catches invented vocabulary — whether the framing is domain-appropriate overall is rubric dimension 2."
+  }
+}

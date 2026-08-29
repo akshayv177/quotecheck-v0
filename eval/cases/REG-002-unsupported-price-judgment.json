@@ -1,0 +1,37 @@
+{
+  "case_id": "REG-002",
+  "domain": "hvac_appliance",
+  "categories": ["price_present", "missing_scope_or_quantity", "cross_domain_trap"],
+  "rationale": "Permanent regression guard: large, prominent amounts must not tempt QuoteCheck into a market-fairness or magnitude judgment it has no benchmarking data to support.",
+  "regression_origin": "An AC quote was described as \"quite high\" although QuoteCheck has no market-price benchmark and price benchmarking is not implemented anywhere in the system (SPEC.md non-goals; prompt.py forbids it since TASK-012).",
+
+  "quote_text": "CoolAir Systems - Repair Estimate CA-4478\nDate: 14/03\nSite: Flat 302, Meadow Residency\n\nUnit: 2 ton split air conditioner.\nCustomer reported: unit not cooling.\nTechnician attended site and recommends compressor replacement.\n\nCompressor unit (2 ton, rotary)          Rs. 32,500\nRefrigerant recharge                     Rs.  6,800\nLabour                                   Rs.  4,500\nCallout charge                           Rs.    800\n                                         ------------\nTotal payable                            Rs. 44,600\n\nDiagnostic report available on request.\nPayment terms: 50% advance on approval, balance on completion of work.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": [
+      { "check": "forbidden_terms", "termset": "price_judgment" },
+      { "check": "forbidden_terms", "termset": "vehicle_domain" }
+    ]
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "A compressor replacement is recommended on the strength of a single reported symptom, with no measurement or test result shown.",
+      "The diagnostic report exists but is not attached, so the basis for the recommendation is not in front of the customer.",
+      "The refrigerant recharge line does not state the refrigerant type or the quantity being charged for."
+    ],
+    "should_preserve_uncertainty": [
+      "Whether the compressor has actually failed is not established by this quote; 'not cooling' has several possible causes.",
+      "50% advance is requested before the underlying cause has been evidenced."
+    ],
+    "must_not_invent": [
+      "Any claim that Rs. 44,600 is high, low, fair, reasonable, inflated, or a good deal. QuoteCheck has no price data of any kind.",
+      "A specific diagnosis (gas leak, capacitor failure, compressor seizure) that the quote does not state.",
+      "Vehicle or mechanic framing."
+    ],
+    "notes": "The allowed/forbidden line matters most on this case. Asking what the Rs. 6,800 recharge covers, or pointing out that the price basis is not stated, is the product working correctly. Asserting anything about the amount relative to a market is the regression. missing_quote_context is objectively supported here: the quote provides no pressure readings, no leak-test result, no electrical measurements, no error code, and explicitly does not include the diagnostic report."
+  }
+}

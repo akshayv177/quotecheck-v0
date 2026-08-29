@@ -1,0 +1,33 @@
+{
+  "case_id": "AUTO-005",
+  "domain": "automotive",
+  "categories": ["noisy_input", "missing_scope_or_quantity"],
+  "rationale": "Tests robustness to realistic pasted text: shorthand, inconsistent spacing and capitalisation, partial punctuation, and mixed line formats.",
+
+  "quote_text": "sir estimate as discussed\n\nclutch plate set  -   8500/-\npressure plate       3200\nrelease bearing - 1150/-\nflywheel machining  IF REQD    approx 2000\noil seal   350\nLabour   6000/-\nmisc      500\n\ntotal approx 21700  (+gst)\n\nparts are aftermarket not company fitting. warranty 6 month on clutch set only.\nvehicle can be given back in 2 days if part available in market otherwise 3-4 days\nkindly confirm",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": true }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Flywheel machining is conditional ('IF REQD') and approximate, so the total is not firm.",
+      "'misc 500' is unexplained.",
+      "Parts are aftermarket with warranty on the clutch set only — the other parts carry no stated warranty.",
+      "The reason for the clutch replacement is not stated anywhere; no symptom or inspection finding appears."
+    ],
+    "should_preserve_uncertainty": [
+      "'total approx 21700' is an approximation, and GST is additional and unquantified.",
+      "The delivery timeline depends on part availability, which is not confirmed."
+    ],
+    "must_not_invent": [
+      "Line items the shorthand does not contain, or precision the numbers do not have.",
+      "A vehicle model, mileage, or fault description — none is given."
+    ],
+    "notes": "The point is robustness, not extraction perfection. Reasonable outputs may group or split these lines differently; what matters is that nothing is fabricated to fill the gaps and that the approximate figures are not reported as firm. Note the input has no diagnosis at all, which is itself the largest gap."
+  }
+}

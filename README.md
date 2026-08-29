@@ -258,6 +258,13 @@ The repo ships six real, captured cross-domain Demo-mode example outputs
 the ticket/review bundles under `docs/`. There is **no automated eval or regression
 harness yet** — no scored semantic evaluation, no CI.
 
+An evaluation *specification* and a 27-case synthetic quote corpus now exist under
+[`eval/`](eval/README.md): a deliberate split between deterministic invariants a runner
+can check honestly and semantic qualities that need human judgment, a 0/1/2 review
+rubric, and two permanent regression cases (domain leakage, and unsupported price
+judgment). **Nothing in `eval/` executes yet** — the runner and any scored results are
+the next piece of work, and no claim is made here about how well QuoteCheck performs.
+
 ---
 
 ## What works today
@@ -358,6 +365,12 @@ examples/
     parts_labour_misc.json
     vague_missing_details.json
 
+eval/
+  README.md           (evaluation specification: deterministic vs. semantic)
+  rubric.md           (human 0/1/2 semantic review rubric)
+  termsets.json       (shared forbidden-term sets)
+  cases/              (27 synthetic quote cases, one JSON file each)
+
 logs/
   app_runs.jsonl
 
@@ -375,7 +388,8 @@ docs/
 ## Roadmap
 
 1. Add bounded repair retry (if model output fails Pydantic validation)
-2. Eval harness: 10–20 quotes -> JSONL results + summary.md metrics
+2. Eval harness: execute the `eval/` corpus against `/analyze` -> JSONL results +
+   per-mode summary (the specification and 27-case corpus exist; the runner does not)
 3. Cost controls: output token caps, shorter rationales, caching hooks, batch eval runs
 4. Product wedge: expanded taxonomy + evidence requirements + HITL workflows
 

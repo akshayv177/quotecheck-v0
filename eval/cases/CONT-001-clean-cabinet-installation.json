@@ -1,0 +1,31 @@
+{
+  "case_id": "CONT-001",
+  "domain": "contractor_vendor",
+  "categories": ["clean_itemized", "price_present"],
+  "rationale": "Tests that a thorough contractor quote with quantities, unit rates, a payment schedule, and a stated timeline is not flagged into ambiguity.",
+
+  "quote_text": "Ridgeway Interiors - Quotation RI-2026-118\nClient: Apartment 7, Sandhurst Court\nScope: kitchen base and wall cabinet installation, existing layout retained.\n\nMaterials:\n  18 mm BWR plywood carcass, 8 ft x 4 ft sheets      6 sheets @ Rs. 3,150   Rs. 18,900\n  Laminate finish, 1 mm, client-selected shade       9 sheets @ Rs.   980   Rs.  8,820\n  Soft-close hinges                                 24 nos.  @ Rs.   210   Rs.  5,040\n  Telescopic drawer channels, 18 inch                8 sets  @ Rs.   640   Rs.  5,120\n  Handles, brushed steel                            14 nos.  @ Rs.   180   Rs.  2,520\n  Adhesive, screws, edge banding                    lot                    Rs.  3,400\n\nLabour:\n  Carpenter, 2 persons x 6 days                     12 person-days @ Rs. 900  Rs. 10,800\n  Site cleaning and debris removal on completion                             Rs.  1,200\n\nSubtotal                                                                     Rs. 55,800\nGST at 18%                                                                   Rs. 10,044\nTotal                                                                        Rs. 65,844\n\nTimeline: 8 working days from material delivery. Delivery 3 days after advance.\nPayment: 40 percent advance, 40 percent on carcass completion, 20 percent on handover.\nWarranty: 5 years against carcass delamination and borer, 1 year on hardware.\nExcluded and quoted separately if required: countertop, sink, plumbing shifting,\nelectrical points. These are not part of this quotation.\n\nQuotation valid for 21 days from the date above.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "uncertainty_marker", "marker": "ambiguous_items_present", "expected": false },
+      { "check": "uncertainty_marker", "marker": "missing_quote_context", "expected": false }
+    ],
+    "must_not": []
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "Every material line carries a quantity and unit rate; labour is expressed in person-days at a stated rate.",
+      "Exclusions are named explicitly, so the client knows what is not covered.",
+      "The payment schedule is milestone-linked rather than front-loaded beyond the advance."
+    ],
+    "should_preserve_uncertainty": [],
+    "must_not_invent": [
+      "A missing scope. The quote states both what is included and what is excluded.",
+      "A concern about the 40 percent advance without noting the quote ties later payments to milestones.",
+      "A price judgment on Rs. 65,844 or on any unit rate."
+    ],
+    "notes": "The contractor_vendor clean case. The 'adhesive, screws, edge banding - lot' line is a lump sum, and it is legitimate to note that it is the one unquantified line — but the quote as a whole is complete, and treating it as ambiguous overall would be over-flagging."
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "case_id": "GEN-002",
+  "domain": "generic_service",
+  "categories": ["vague_bundled_charge", "cross_domain_trap"],
+  "rationale": "Tests behaviour on a quote with no domain signal at all: the vague charges must be surfaced without a domain being invented to explain them.",
+
+  "quote_text": "Quotation\n\nSupply and replacement of one control unit, as per the fault reported by the customer.\n\n  Replacement unit                                  Rs.  9,800\n  Installation and testing labour                   Rs.  2,400\n  Miscellaneous handling                            Rs.    750\n  Other charges as applicable                       Rs.    500\n                                                    ----------\n  Total                                             Rs. 13,450\n\nUnit carries the manufacturer's standard warranty. Old unit to be returned to us.\nCharges may be revised if additional work is found necessary during installation.\nKindly confirm to proceed.",
+
+  "deterministic_expectations": {
+    "must": [
+      { "check": "line_items_where", "property": "vague_or_confusing", "value": true, "min_count": 1 }
+    ],
+    "must_not": [
+      { "check": "forbidden_terms", "termset": "vehicle_domain" },
+      { "check": "forbidden_terms", "termset": "trade_domain" }
+    ]
+  },
+
+  "semantic_expectations": {
+    "should_identify": [
+      "'Miscellaneous handling' and 'other charges as applicable' are unexplained, and the latter is open-ended by its own wording.",
+      "The 'control unit' is never identified — no make, model, part number, or equipment it belongs to.",
+      "'The fault reported by the customer' is referenced but never stated, so nothing establishes why replacement is the right fix.",
+      "The manufacturer's warranty is invoked without naming the manufacturer or the term."
+    ],
+    "should_preserve_uncertainty": [
+      "'Charges may be revised if additional work is found necessary' means the total is not fixed.",
+      "What kind of equipment this is cannot be determined from the quote."
+    ],
+    "must_not_invent": [
+      "A domain. This could be an appliance, a vehicle part, an electronics board, or industrial equipment — the quote does not say, and QuoteCheck must not pick one.",
+      "Vehicle, mechanic, brake, or tyre vocabulary.",
+      "Plumbing, contractor, mason, electrician, or renovation vocabulary.",
+      "A diagnosis, since the fault itself is never described."
+    ],
+    "notes": "The purest cross-domain trap in the corpus: with no domain signal, a model with strong priors may reach for the domain it has seen most often. The honest output describes what the quote actually says and asks what the unit is. Note that a vendor-neutral phrase like 'the technician' is fine; naming a specific trade is not."
+  }
+}

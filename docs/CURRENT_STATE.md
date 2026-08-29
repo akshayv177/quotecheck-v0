@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-28 (QC-1B)
+Last updated: 2026-08-28 (QC-3A)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -176,7 +176,9 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
   Reproducibility depends on the developer activating a compatible Python 3.10+
   environment themselves (README documents a conda-based path).
-- No backend tests, no automated eval / regression harness, no CI.
+- No backend tests, no automated eval / regression harness, no CI. An evaluation
+  *specification* and case corpus now exist under `eval/` (QC-3A), but nothing executes
+  them — there is no runner and no scoring.
 - No verified public deployment.
 - No repair/retry when model output fails schema validation.
 - Paste-text input only: no PDF/OCR, no auth/users/DB.
@@ -195,6 +197,75 @@ no API key), `=1` = OpenAI mode (requires `OPENAI_API_KEY`).
   falls through to the single generic "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-3A
+
+Evaluation specification and case corpus, written before the runner so QC-3B targets a
+contract that was decided deliberately rather than inferred from whatever the code
+happens to do. **No application source, examples, logs, or config behaviour changed.**
+
+What now exists:
+
+- `eval/README.md` — the evaluation specification: the Layer A (deterministic
+  invariants) vs. Layer B (semantic judgment) split, the case-file format, the
+  deterministic check vocabulary, an honest per-check statement of which checks are
+  robust and which are proxies, the corpus coverage tables, the two historical
+  regression cases, current non-goals, and what QC-3B may and may not do with the
+  results.
+- `eval/rubric.md` — a human semantic rubric: six dimensions (Faithfulness, Unsupported
+  inference, Uncertainty calibration, Explanation quality, Actionability,
+  Professional-boundary discipline) on a 0/1/2 scale with each level defined.
+  Faithfulness and Unsupported inference are gates: a 0 on either fails the case
+  regardless of the other four scores. Scores are reported as per-dimension
+  distributions; averaging the six dimensions into a single number is explicitly
+  prohibited.
+- `eval/cases/*.json` — **27 synthetic cases**, one JSON file per case, spanning six
+  domains: automotive 5, hvac_appliance 5, contractor_vendor 5, plumbing_home 4,
+  electronics_repair 4, generic_service 4. Nine categories are covered:
+  price_present 10, missing_scope_or_quantity 9, clean_itemized 6,
+  vague_bundled_charge 6, conditional_work 5, cross_domain_trap 5,
+  professional_confirmation_expected 4, professional_confirmation_not_expected 4,
+  noisy_input 3. Every quote is synthetic with fictional vendor names and no personal
+  data. Every case carries a stable `case_id`, a one-sentence `rationale`, deterministic
+  expectations, and semantic expectations.
+- **Permanent historical regression cases.** `REG-001` guards HVAC → vehicle/mechanic
+  domain leakage (the TASK-012 failure), asserted against inappropriate leakage rather
+  than the deleted `missing_vehicle_context` field name, which no longer exists.
+  `REG-002` guards unsupported market-price/fairness judgment (the "quite high" failure)
+  on a quote carrying deliberately large amounts.
+- `eval/termsets.json` — three shared forbidden-term sets (`price_judgment`,
+  `vehicle_domain`, `trade_domain`). Each termset's match `mode` is defined here and
+  only here; case files reference a termset by name and never restate its mode.
+- **Deterministic expectations designed for QC-3B**: six check types
+  (`schema_valid`, `metadata_complete`, `forbidden_terms`, `uncertainty_marker`,
+  `line_items_where`, `topic_present`), three of them applied as global invariants to
+  every case. Matching is case-insensitive whole-word, never substring. No
+  exact-output golden files were introduced.
+
+Deliberate design decisions recorded in `docs/tickets/QC-3A-eval-spec-and-corpus.md`:
+the `price_judgment` termset is high-precision rather than comprehensive (bare
+"expensive"/"fair price" false-positive on correct boundary language such as "QuoteCheck
+cannot determine whether this is a fair price", and a negation parser is not worth
+building); nuanced price-fairness language stays with the semantic rubric; and category
+tags carry mandatory matching assertions so they cannot become decorative.
+
+What does **not** exist:
+
+- **No executable eval runner.** Nothing in `eval/` runs. QC-3B owns the runner and any
+  `results/` artifacts.
+- **No automated scoring**, no pass rates, no CI, no `results/` directory.
+- **No new model-quality claims.** This ticket produced a specification and inputs; it
+  measured nothing and says nothing about how well QuoteCheck currently performs.
+
+The corpus deliberately targets the intended product contract, not the Demo stub's
+keyword heuristics, so Demo mode will fail some cases by construction — most visibly the
+six `clean_itemized` cases, since `stub_analyzer.py` hardcodes
+`ambiguous_items_present = True` (see the QC-1B block below). Those are real,
+already-documented gaps left in as signal; `eval/README.md` records that QC-3B must
+report per mode and must not xfail or exclude them from pass-rate denominators.
+
+`README.md` received a minimal truth-maintenance edit only (Evaluation section, repo
+tree, Roadmap item 2). `SPEC.md` was inspected and needed no change.
 
 ### Fixed in QC-1B
 
