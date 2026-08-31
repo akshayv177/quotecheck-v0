@@ -48,22 +48,35 @@ Configuration and secrets
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from dotenv import load_dotenv
-load_dotenv("backend/.env")
+# Resolve backend/.env relative to this file, not the process CWD, so a hosted
+# deployment that launches uvicorn from any directory behaves the same as local
+# dev. override=False (the default) keeps real environment variables — e.g. the
+# eval runner's QUOTECHECK_USE_OPENAI — authoritative over the file.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 import time
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 
-from backend.core.schema import AnalyzeRequest, QuoteCheckResult
+from backend.core.schema import AnalyzeRequest, MAX_QUOTE_TEXT_CHARS, QuoteCheckResult
 from backend.core.run_logger import log_app_run
 from backend.core.prompt import PROMPT_VERSION
-from backend.core.config import APP_RUN_LOG_PATH, USE_OPENAI, MODEL, DEMO_ANALYZER_MODEL
+from backend.core.config import (
+    ALLOWED_ORIGINS,
+    APP_RUN_LOG_PATH,
+    DEMO_ANALYZER_MODEL,
+    MODEL,
+    USE_OPENAI,
+)
 from backend.core.errors import FailureCategory, QuoteCheckError, error_response_body
 from backend.core.openai_analyzer import analyze_quote_openai
 from backend.core.stub_analyzer import analyze_quote_stub
@@ -85,6 +98,37 @@ def _quotecheck_error_handler(request: Request, exc: QuoteCheckError) -> JSONRes
     return JSONResponse(status_code=exc.http_status, content=error_response_body(exc))
 
 
+@app.exception_handler(RequestValidationError)
+def _request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Render request-shape failures in the same small body as classified errors.
+
+    FastAPI's default 422 is a list of Pydantic error dicts (field names, internal
+    types). A stranger should instead get one product-safe sentence. ``code`` here
+    is a response string, not a FailureCategory — the QC-4 taxonomy is unchanged.
+    Covers oversized quote text, malformed JSON, and a missing/!invalid body.
+    """
+    request_id = str(uuid.uuid4())
+    too_long = any(err.get("type") == "string_too_long" for err in exc.errors())
+    if too_long:
+        message = (
+            f"That quote is too long. Please shorten it to {MAX_QUOTE_TEXT_CHARS:,} "
+            "characters or fewer and try again."
+        )
+    else:
+        message = "That request wasn't valid. Paste the quote text and try again."
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": {
+                "code": "invalid_request",
+                "message": message,
+                "retryable": False,
+                "request_id": request_id,
+            }
+        },
+    )
+
+
 def _safe_log(**fields) -> None:
     """Write one run-log record; a logging failure must not mask the analysis outcome."""
     try:
@@ -92,11 +136,13 @@ def _safe_log(**fields) -> None:
     except Exception:  # noqa: BLE001 - observability is best-effort, never fatal
         pass
 
-# Local development CORS policy.
-# Vite dev server typically runs on http://localhost:5173
+# Allowed browser origins come from QUOTECHECK_ALLOWED_ORIGINS (see
+# backend/core/config.py). Unset -> the local Vite dev server; for a public
+# deployment it must be the exact frontend origin(s). Never "*", and credentials
+# stay disabled so a broad origin can never carry cookies.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -42,7 +42,7 @@ Real OpenAI calls are opt-in — see [Demo mode vs. OpenAI mode](#demo-mode-vs-o
 
 - Python 3.10+ (there is no committed `environment.yml`/lockfile yet, only a pinned
   `backend/requirements.txt`; see [Limitations](#limitations))
-- Node 18+ / npm
+- Node 20.19+ / npm (Vite 7 requirement)
 - WSL2 Ubuntu 22 works great
 
 ### 0) Clone
@@ -91,6 +91,12 @@ cd frontend
 npm install
 npm run dev -- --host
 ```
+
+The frontend calls the backend at `VITE_API_BASE_URL`, defaulting to
+`http://localhost:8000` when unset — local dev needs no configuration. To point a
+build at a different backend, copy `frontend/.env.example` to `frontend/.env` and set
+the URL. `VITE_*` values are embedded in the built bundle and browser-visible — never
+put a secret there.
 
 Open the URL Vite prints (usually `http://localhost:5173`) → the textarea is
 pre-filled with a sample quote → click **Analyze quote** → see the full
@@ -171,6 +177,52 @@ response; no OpenAI call was made to produce it.
 
 ---
 
+## Deploying the public Demo
+
+The first public deployment is intentionally **Demo-only** — no OpenAI key, no paid
+inference:
+
+```
+Browser → Vercel frontend → HTTPS → Railway FastAPI backend → Demo analyzer → QuoteCheckResult
+```
+
+QC-2A makes the repository deployment-ready; the actual deploy and live smoke
+verification happen in QC-2B. There is **no live demo or production deployment yet**,
+and no public URL.
+
+**Frontend (Vercel):**
+
+- Root directory: `frontend/`
+- Build environment variable: `VITE_API_BASE_URL=<Railway backend HTTPS URL>`
+  (browser-visible — never a secret)
+
+**Backend (Railway):** run from the repo root (no `--reload`):
+
+```bash
+uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+```
+
+Environment:
+
+| Variable | Value |
+|---|---|
+| `QUOTECHECK_USE_OPENAI` | `0` |
+| `QUOTECHECK_ALLOWED_ORIGINS` | the exact Vercel frontend origin, e.g. `https://your-frontend.vercel.app` (comma-separate multiples; `*` is rejected) |
+| `PORT` | supplied by Railway |
+| `OPENAI_API_KEY` | **do not set** — omitting it is a deliberate cost/safety boundary |
+
+`backend/.env` is untracked and absent in the hosted environment; the backend reads
+its configuration from these platform environment variables. Run-log output
+(`logs/app_runs.jsonl`) is written to the host's local, ephemeral filesystem — it is
+not durable or centralized observability. Maximum accepted `quote_text` length is
+**12,000 characters** (server-enforced; see [API](#api)). OpenAI mode remains
+available for local use and is unaffected by this deployment shape.
+
+No committed platform manifest (`Procfile` / `railway.json` / `vercel.json`) is
+included yet — QC-2B adds the smallest one only if the real workflow requires it.
+
+---
+
 ## API
 
 ### `POST /analyze`
@@ -179,6 +231,15 @@ Request:
 
 ```json
 { "quote_text": "Brake pads replacement recommended. Tyre rotation." }
+```
+
+`quote_text` is required, must be non-empty, and is capped at **12,000 characters**
+(server-enforced). An empty body, malformed JSON, or over-length `quote_text` returns
+HTTP 422 with the same envelope shape as a failure, using
+`"code": "invalid_request"`:
+
+```json
+{ "detail": { "code": "invalid_request", "message": "That quote is too long. Please shorten it to 12,000 characters or fewer and try again.", "retryable": false, "request_id": "…" } }
 ```
 
 Response on success: **QuoteCheckResult** (schema-valid JSON) — see
@@ -349,9 +410,11 @@ cases guard domain leakage and unsupported price judgment.
 
 - Not production-ready: no auth, no database, no persistence beyond the local JSONL
   log, no SLAs, no production-scale monitoring or load testing. OpenAI-mode failures
-  are now explicitly classified, bounded, and logged (QC-4), but there is still no
-  public rate limiting / quota control, no durable or centralized logging, and no
-  live-deployment verification — OpenAI mode is not yet safe to expose anonymously.
+  are now explicitly classified, bounded, and logged (QC-4), and QC-2A made the repo
+  deployable in Demo mode (configurable frontend backend URL, configurable exact CORS
+  origins, a 12,000-character `quote_text` cap), but there is still no verified public
+  deployment or URL, no public rate limiting / quota control, and no durable or
+  centralized logging. Public OpenAI mode stays intentionally disabled.
 - Paste-text input only — no PDF/OCR/image ingestion.
 - No market-price benchmarking, and no objective price-fairness judgment — QuoteCheck
   describes only what the quote itself states.
@@ -416,6 +479,7 @@ backend/
 
 frontend/
   src/App.jsx
+  .env.example       (VITE_API_BASE_URL — browser-visible, no secrets)
 
 examples/
   README.md
@@ -460,9 +524,11 @@ docs/
 
 ## Roadmap
 
-1. Deployment preparation: public rate limiting / quota control, input-length
-   caps, durable/centralized logging — the gate before OpenAI mode can be exposed
-   anonymously (QC-4 classified and bounded failures but did not add these)
+1. Deployment: QC-2A made the repo deployable in Demo mode (configurable frontend
+   backend URL, configurable exact CORS origins, a 12,000-character input cap). Still
+   open — QC-2B's live Vercel + Railway deploy and smoke verification, then public
+   rate limiting / quota control and durable/centralized logging before OpenAI mode
+   could ever be exposed anonymously
 2. Eval: semantic Layer B review pass against `eval/rubric.md`; CI wiring for the
    deterministic runner (the runner and its Demo baseline exist)
 3. Cost controls: output token caps, shorter rationales, caching hooks, batch eval runs
