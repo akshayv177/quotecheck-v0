@@ -35,9 +35,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const API_BASE = "http://localhost:8000";
+// Backend base URL. Production builds set VITE_API_BASE_URL to the deployed
+// backend's HTTPS origin; local dev falls back to the documented localhost port.
+// Trim + strip trailing slashes so stray whitespace in deployment config can't
+// produce a broken request URL. VITE_* values are embedded in the built bundle
+// and visible to anyone — never put a secret here.
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/+$/, "") ||
+  "http://localhost:8000";
 
 const DEMO_ANALYZER_MODEL = "quotecheck-demo-analyzer";
+
+// Mirrors backend MAX_QUOTE_TEXT_CHARS (backend/core/schema.py). UX only — the
+// server enforces the authoritative bound and returns HTTP 422 above it.
+// eval/tests/test_deployment_readiness.py asserts these two stay equal.
+const MAX_QUOTE_CHARS = 12000;
 
 // Final client-side safety bound only. It sits above the backend provider-call
 // budget (up to 2 attempts x 30s per QUOTECHECK_OPENAI_TIMEOUT_SECONDS), so
@@ -65,7 +77,7 @@ function formatElapsed(ms) {
 }
 
 const NETWORK_ERROR_MESSAGE =
-  "Couldn't reach the QuoteCheck backend. Make sure it's running at http://localhost:8000, then try again.";
+  `Couldn't reach the QuoteCheck backend at ${API_BASE}. Make sure it's running and reachable, then try again.`;
 const TIMEOUT_ERROR_MESSAGE =
   "This is taking longer than expected (over 70 seconds), so QuoteCheck gave up waiting. " +
   "If you're running in AI mode the model call may be slow or stuck — try again, or check the backend terminal for errors.";
@@ -184,10 +196,14 @@ export default function App() {
           value={quoteText}
           onChange={(e) => setQuoteText(e.target.value)}
           rows={8}
+          maxLength={MAX_QUOTE_CHARS}
           placeholder="Paste the quote text exactly as you received it…"
         />
         <div className="qc-input-card__hint">
           Works with service, repair, and parts quotes. Text only for now.
+          <span className="qc-input-card__count">
+            {quoteText.length.toLocaleString()} / {MAX_QUOTE_CHARS.toLocaleString()}
+          </span>
         </div>
 
         <div className="qc-actions">
@@ -223,7 +239,7 @@ export default function App() {
           <div className="qc-error-card__message">{err.message}</div>
           {(err.kind === "http" || err.kind === "other") && (
             <div className="qc-error-card__hint">
-              Check that the backend is running on port 8000.
+              Check that the backend at {API_BASE} is running.
             </div>
           )}
           {err.kind === "api" && err.requestId && (

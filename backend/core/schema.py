@@ -26,6 +26,18 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+# Server-authoritative maximum length for AnalyzeRequest.quote_text.
+#
+# Rationale (observed corpus/example sizes, characters not tokens): the largest
+# bundled example input is 341 chars and the largest eval-corpus quote_text is
+# 1,571 chars (CONT-001, a full itemized contractor quotation). 12,000 is ~7.6x
+# that ceiling — comfortably fitting any realistic multi-page pasted quote while
+# rejecting document dumps. This is an input-size safeguard, not complete
+# abuse / request-body protection. The frontend mirrors this number
+# (frontend/src/App.jsx MAX_QUOTE_CHARS) for UX only; this bound is authoritative.
+MAX_QUOTE_TEXT_CHARS = 12_000
+
+
 class NormalizedCategory(str, Enum):
     """
     Controlled taxonomy for quote line items.
@@ -223,6 +235,12 @@ class AnalyzeRequest(BaseModel):
 
     quote_text: the raw quote content pasted by the user.
     """
-    quote_text: str = Field(..., min_length=1, alias="quoteText", description="Raw service quote text pasted by the user.")
+    quote_text: str = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_QUOTE_TEXT_CHARS,
+        alias="quoteText",
+        description="Raw service quote text pasted by the user.",
+    )
 
     model_config = {"populate_by_name": True, "extra": "forbid"}

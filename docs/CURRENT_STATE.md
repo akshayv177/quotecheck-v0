@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-29 (QC-4)
+Last updated: 2026-08-31 (QC-2A)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -11,14 +11,20 @@ Two-process local app: a React single-page frontend posts pasted quote text to a
 FastAPI backend, which returns a schema-valid `QuoteCheckResult` and appends one
 JSONL log record per request.
 
-- `backend/app.py` — FastAPI app; `GET /health`, `POST /analyze`; CORS for the Vite
-  dev server; per-request logging (success and failure paths, guarded so a logging
-  failure never masks the analysis outcome). A `QuoteCheckError` exception handler
-  renders classified OpenAI-mode failures as `{"detail": {code, message, retryable,
-  request_id}}` with the mapped HTTP status; an unclassified exception is wrapped as
-  `internal_error` (500).
+- `backend/app.py` — FastAPI app; `GET /health`, `POST /analyze`; CORS origins from
+  `QUOTECHECK_ALLOWED_ORIGINS` (QC-2A; unset → the local Vite dev server); per-request
+  logging (success and failure paths, guarded so a logging failure never masks the
+  analysis outcome). Loads `backend/.env` by an absolute path (resolved from the
+  module, not the CWD). A `QuoteCheckError` exception handler renders classified
+  OpenAI-mode failures as `{"detail": {code, message, retryable, request_id}}` with
+  the mapped HTTP status; an unclassified exception is wrapped as `internal_error`
+  (500). A `RequestValidationError` handler (QC-2A) renders oversized/empty/malformed
+  requests in the same body shape with `"code": "invalid_request"` (HTTP 422) — not a
+  new `FailureCategory`.
 - `backend/core/schema.py` — Pydantic contract (`AnalyzeRequest`, `QuoteCheckResult`
   and nested models: line items, risk levels, uncertainty markers, refusals, metadata).
+  `AnalyzeRequest.quote_text` is bounded `1..MAX_QUOTE_TEXT_CHARS` (QC-2A; 12,000
+  characters — server-authoritative, FastAPI 422 above it).
 - `backend/core/stub_analyzer.py` — deterministic keyword-heuristic analyzer
   (default mode, zero cost, product-facing name "Demo mode"). Recognizes vehicle
   (brake/tyre), AC/appliance (air conditioning/compressor/refrigerant/hvac/appliance),
@@ -61,12 +67,18 @@ JSONL log record per request.
 - `backend/core/config.py` — env-var config: `QUOTECHECK_USE_OPENAI`, `QUOTECHECK_MODEL`
   (default `gpt-4o-mini`), `QUOTECHECK_LOG_PATH`, `OPENAI_API_KEY`,
   `QUOTECHECK_OPENAI_TIMEOUT_SECONDS` (default 30s; validated lazily — a malformed
-  value surfaces as `configuration_error`, not an opaque httpx failure), and fixed
-  code constants `DEMO_ANALYZER_MODEL`, `OPENAI_MAX_RETRIES = 1`,
-  `OPENAI_MAX_ATTEMPTS = 2` (retry count is deliberately not env-overridable — it
-  affects cost and request amplification). Loaded from untracked `backend/.env`
-  (template: `backend/.env.example`); if `backend/.env` doesn't exist at all, the
-  app still runs — defaults are `QUOTECHECK_USE_OPENAI=0` (Demo mode).
+  value surfaces as `configuration_error`, not an opaque httpx failure),
+  `QUOTECHECK_ALLOWED_ORIGINS` (QC-2A — comma-separated EXACT browser origins parsed
+  with `urllib.parse.urlsplit`; `*`, a path/query/fragment, a missing scheme/host, and
+  an explicitly-set-but-empty value all raise at import; unset → the local Vite dev
+  server on both hostnames), and fixed code constants `DEMO_ANALYZER_MODEL`,
+  `OPENAI_MAX_RETRIES = 1`, `OPENAI_MAX_ATTEMPTS = 2` (retry count is deliberately not
+  env-overridable — it affects cost and request amplification). `OPENAI_API_KEY` is
+  read but never validated at startup — Demo mode starts and serves with the key
+  absent; it is required only when the OpenAI path actually executes. Loaded from
+  untracked `backend/.env` (template: `backend/.env.example`); if `backend/.env`
+  doesn't exist at all, the app still runs — defaults are `QUOTECHECK_USE_OPENAI=0`
+  (Demo mode).
 - `backend/core/run_logger.py` / `logs/app_runs.jsonl` — append-only JSONL run logs.
   QC-4 adds sanitized fields: `analyzer` (`openai`/`demo`), `success`,
   `failure_category`, `retryable`, `cause_type` (exception class name only),
@@ -129,11 +141,25 @@ curl http://localhost:8000/health
 `backend/requirements.txt` installed works. README's quickstart leads with plain `venv`
 as of TASK-009 since it's more universal than assuming conda is installed.)
 
+Deployment-style Demo start (QC-2A — repo root, no `--reload`, platform-supplied port,
+explicit CORS origin, OpenAI key absent):
+
+```bash
+env -u OPENAI_API_KEY QUOTECHECK_USE_OPENAI=0 \
+  QUOTECHECK_ALLOWED_ORIGINS=https://<frontend-origin> \
+  uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+```
+
+The frontend backend URL is `VITE_API_BASE_URL` (default `http://localhost:8000`;
+template `frontend/.env.example`). `VITE_*` values are embedded in the built bundle
+and browser-visible — no secrets. See the README "Deploying the public Demo" section
+for the Vercel + Railway matrix QC-2B will use.
+
 Frontend:
 
 ```bash
 cd frontend
-npm install
+npm ci                  # package-lock.json is committed; npm install also works
 npm run dev -- --host   # dev server, usually http://localhost:5173
 npm run build
 npm run lint            # eslint; only frontend check that exists
@@ -228,10 +254,14 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   (`eval/tests/test_stub_analyzer.py`). Semantic (Layer B) grading remains manual.
   QC-3C repaired the largest application-level Demo gaps the QC-3B baseline exposed
   (11/27 → 24/27 deterministic contract pass); 3 documented limitations remain.
-- No verified public deployment. OpenAI-mode failures are classified, bounded, and
-  logged (QC-4), but there is still no public rate limiting / quota control, no
-  input-length cap, no durable or centralized logging, and no live-deployment
-  verification — OpenAI mode is not yet safe to expose anonymously.
+- No verified public deployment and no public URL yet. QC-2A made the repo
+  deployment-ready in Demo mode (configurable frontend backend URL, configurable exact
+  CORS origins, a 12,000-character `quote_text` cap, clean startup with the OpenAI key
+  absent, local CORS + clean-start smoke) but did not deploy anything — QC-2B performs
+  the live Vercel + Railway deploy and smoke verification. Still open: no public rate
+  limiting / quota control, and no durable or centralized logging (hosted run logs are
+  local and ephemeral). Public OpenAI mode is intentionally disabled for the first
+  deployment — it is not exposed anonymously.
 - No semantic repair when model output fails schema validation: it is reported as
   `invalid_model_output` and never patched or re-requested (deliberate — QC-4). No
   bounded repair-retry either.
@@ -263,6 +293,76 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-2A
+
+Deployment readiness — the repository is now safely configurable for a public
+**Demo-only** deployment (`Vercel frontend → Railway FastAPI → QUOTECHECK_USE_OPENAI=0
+→ Demo analyzer`). **No live deployment was performed** (that is QC-2B), **no paid
+OpenAI inference**, no new dependency, and no change to the eval corpus / graders /
+termsets / rubric, the Demo analyzer semantics, the QC-4 failure taxonomy, the prompt
+(`PROMPT_VERSION` stays `quotecheck_v0.4`), or the committed eval baselines.
+
+- **Configurable frontend backend URL** — `frontend/src/App.jsx` reads
+  `import.meta.env.VITE_API_BASE_URL` (trimmed, trailing slashes stripped), falling
+  back to `http://localhost:8000` for local dev. New `frontend/.env.example`
+  documents it and the `VITE_*` browser-visibility rule. The two former hardcoded
+  `http://localhost:8000` strings now interpolate the resolved base.
+- **Configurable exact CORS origins** — `QUOTECHECK_ALLOWED_ORIGINS` in
+  `backend/core/config.py`, parsed with `urllib.parse.urlsplit`: comma-separated exact
+  browser origins, whitespace tolerated, a single trailing slash normalized,
+  duplicates deduped. Wildcard `*`, any path/query/fragment, a missing scheme or host,
+  and an explicitly-set-but-empty value each raise at import (fail fast). Unset → the
+  local Vite dev server on both hostnames, so local dev is unchanged. `backend/app.py`
+  feeds this list to `CORSMiddleware` (`allow_credentials=False`).
+- **Bounded quote input** — `AnalyzeRequest.quote_text` is `1..12,000` characters
+  (`MAX_QUOTE_TEXT_CHARS`, `backend/core/schema.py`), server-authoritative. Rationale:
+  the largest bundled example input is 341 chars and the largest eval-corpus
+  `quote_text` is 1,571 (CONT-001); 12,000 is ~7.6× that. Characters, not tokens.
+  `frontend/src/App.jsx` mirrors it as `MAX_QUOTE_CHARS` (textarea `maxLength` + a
+  small character counter); a stdlib test asserts the two constants stay equal.
+- **Product-safe validation errors** — a `RequestValidationError` handler in
+  `backend/app.py` renders oversized / empty / malformed-JSON / missing-body requests
+  as `{"detail": {"code": "invalid_request", "message", "retryable": false,
+  "request_id"}}` (HTTP 422) — the same envelope shape as a classified failure, so the
+  frontend shows a useful sentence instead of raw Pydantic internals. `invalid_request`
+  is a response string, not a new `FailureCategory`.
+- **Clean Demo startup without an OpenAI key** — `backend/core/config.py` still does
+  no startup key validation; `backend/app.py` now loads `backend/.env` by an absolute
+  path (resolved from the module, `override=False`) so a hosted process started from
+  any CWD behaves like local dev. Verified: `OPENAI_API_KEY` absent →
+  `QUOTECHECK_USE_OPENAI=0` → `/health` 200, `/analyze` 200 with
+  `metadata.model == "quotecheck-demo-analyzer"`, OpenAI client never constructed.
+- **`/health` unchanged** — still `{"status": "ok"}`; no provider call, no secrets, no
+  environment internals. Already appropriate as a liveness endpoint.
+- **Deployment documentation** — README "Deploying the public Demo" section (Vercel
+  root `frontend/`, Railway `uvicorn backend.app:app --host 0.0.0.0 --port $PORT` with
+  no `--reload`, the env-var matrix, `OPENAI_API_KEY` deliberately unset, ephemeral
+  local logs). No platform manifest committed (`Procfile` / `railway.json` /
+  `vercel.json` / Docker) — QC-2B adds the smallest one only if the real workflow
+  needs it. `backend/.env.example` gains `QUOTECHECK_ALLOWED_ORIGINS` and a `PORT` note.
+- **Tests** — `eval/tests/test_deployment_readiness.py` (stdlib `unittest`, no
+  network): origin parsing/validation, default-origin CORS preflight (allowed vs
+  disallowed) through `TestClient`, a subprocess integration test proving a non-default
+  `QUOTECHECK_ALLOWED_ORIGINS` reaches `CORSMiddleware`, the input-size contract,
+  Demo-mode `/health` + `/analyze` with the key absent, the OpenAI-client-never-built
+  assertion, and the cross-language length-contract check. Suite: 118 → 144 tests, OK.
+- **`frontend/.gitignore` repaired** — was a corrupted copy of the root ignore
+  (Python entries + a stray literal `EOF` line); replaced with a minimal correct
+  Node/Vite ignore that keeps `!.env.example` tracked.
+- **Local smoke verification** — single Demo Uvicorn process (`OPENAI_API_KEY`
+  stripped): `/health`, Demo `/analyze` (`metadata.model` correct), allowed-origin
+  preflight granted, disallowed-origin preflight not granted, 12,001-char body → 422
+  `invalid_request`, 12,000-char body → 200. No network / OpenAI call.
+- **Demo eval unchanged** — `python -m eval.run_eval --validate-only` OK;
+  `python -m eval.run_eval --mode demo` → 27/27 schema-valid, 24/27 deterministic
+  contract pass, identical to the committed QC-3C baseline. No new baseline committed;
+  transient run artifacts deleted.
+
+Remaining after QC-2A: no verified public deployment yet; no public URL yet; no
+durable centralized logs; no public rate limiting / quotas; public OpenAI mode
+intentionally disabled; semantic (Layer B) evaluation remains manual; the 3 known
+deterministic Demo limitations (`AUTO-004`, `CONT-003`, `HVAC-003`) remain.
 
 ### Added in QC-4
 

@@ -208,6 +208,11 @@ h1, h2, h3 {
   color: var(--ink-3);
 }
 
+.qc-input-card__count {
+  float: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .qc-actions {
   margin-top: var(--space-4);
 }
