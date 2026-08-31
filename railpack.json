@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "python",
+  "packages": {
+    "python": "3.11"
+  },
+  "steps": {
+    "install": {
+      "commands": [
+        { "src": "backend/requirements.txt", "dest": "requirements.txt" },
+        "python -m venv /app/.venv",
+        "/app/.venv/bin/pip install --no-cache-dir -r requirements.txt"
+      ],
+      "deployOutputs": [".venv"]
+    }
+  },
+  "deploy": {
+    "startCommand": "/app/.venv/bin/python -m uvicorn backend.app:app --host 0.0.0.0 --port $PORT"
+  }
+}
