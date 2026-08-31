@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-31 (QC-2A)
+Last updated: 2026-08-31 (QC-2B)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -142,7 +142,7 @@ curl http://localhost:8000/health
 as of TASK-009 since it's more universal than assuming conda is installed.)
 
 Deployment-style Demo start (QC-2A — repo root, no `--reload`, platform-supplied port,
-explicit CORS origin, OpenAI key absent):
+explicit CORS origin, no OpenAI key configured):
 
 ```bash
 env -u OPENAI_API_KEY QUOTECHECK_USE_OPENAI=0 \
@@ -150,10 +150,13 @@ env -u OPENAI_API_KEY QUOTECHECK_USE_OPENAI=0 \
   uvicorn backend.app:app --host 0.0.0.0 --port $PORT
 ```
 
-The frontend backend URL is `VITE_API_BASE_URL` (default `http://localhost:8000`;
-template `frontend/.env.example`). `VITE_*` values are embedded in the built bundle
-and browser-visible — no secrets. See the README "Deploying the public Demo" section
-for the Vercel + Railway matrix QC-2B will use.
+The public deployment (QC-2B) runs this shape on Railway via a repo-root
+`railpack.json` (Python provider, Python 3.11, staged `backend/requirements.txt`,
+`/app/.venv`, `uvicorn backend.app:app --host 0.0.0.0 --port $PORT`). The frontend
+backend URL is `VITE_API_BASE_URL` (default `http://localhost:8000`; template
+`frontend/.env.example`). `VITE_*` values are embedded in the built bundle and
+browser-visible — no secrets. See the README "Public demo deployment" section for the
+live URLs and the Vercel + Railway configuration matrix.
 
 Frontend:
 
@@ -254,14 +257,20 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   (`eval/tests/test_stub_analyzer.py`). Semantic (Layer B) grading remains manual.
   QC-3C repaired the largest application-level Demo gaps the QC-3B baseline exposed
   (11/27 → 24/27 deterministic contract pass); 3 documented limitations remain.
-- No verified public deployment and no public URL yet. QC-2A made the repo
-  deployment-ready in Demo mode (configurable frontend backend URL, configurable exact
-  CORS origins, a 12,000-character `quote_text` cap, clean startup with the OpenAI key
-  absent, local CORS + clean-start smoke) but did not deploy anything — QC-2B performs
-  the live Vercel + Railway deploy and smoke verification. Still open: no public rate
-  limiting / quota control, and no durable or centralized logging (hosted run logs are
-  local and ephemeral). Public OpenAI mode is intentionally disabled for the first
-  deployment — it is not exposed anonymously.
+- Public deployment exists (QC-2B): frontend on Vercel
+  (`https://quotecheck-frontend.vercel.app`), backend on Railway
+  (`https://quotecheck-v0-production.up.railway.app`), verified end-to-end in the
+  browser. The observed public hosted requests execute through QuoteCheck's
+  deterministic Demo analyzer (`metadata.model = "quotecheck-demo-analyzer"`,
+  `prompt_version = "quotecheck_v0.4"`, `schema_valid = true` observed live). The
+  hosted Demo is intended to run with `QUOTECHECK_USE_OPENAI=0` and no
+  `OPENAI_API_KEY`; the Railway variable state was not inspected here, so the runtime
+  provenance above — not an environment dump — is the evidence that the OpenAI path
+  was not taken. Still open: no public rate limiting / quota control, and no durable
+  or centralized logging (hosted run logs are local and ephemeral). OpenAI mode
+  remains an optional repository capability — not the path observed in the public
+  deployment and not exposed anonymously. QC-5 (final public inspection) is the next
+  task.
 - No semantic repair when model output fails schema validation: it is reported as
   `invalid_model_output` and never patched or re-requested (deliberate — QC-4). No
   bounded repair-retry either.
@@ -293,6 +302,65 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-2B
+
+First public deployment of QuoteCheck, plus the closeout documentation and evidence.
+**This closeout changed no application, frontend, backend, `railpack.json`,
+dependency, schema, prompt (`PROMPT_VERSION` stays `quotecheck_v0.4`), or eval
+behaviour** — it added the QC-2B ticket + review bundle, updated `README.md` and this
+file, and added `.vercel` to `frontend/.gitignore`. The build manifest itself
+(`railpack.json`) landed earlier on `main` (commits `576fdaa`, `e49561a`).
+
+- **Live URLs.** Frontend: `https://quotecheck-frontend.vercel.app` (Vercel, project
+  `quotecheck-frontend`, root directory `frontend/`, build var
+  `VITE_API_BASE_URL=https://quotecheck-v0-production.up.railway.app`). Backend:
+  `https://quotecheck-v0-production.up.railway.app` (Railway, FastAPI via Uvicorn).
+- **Hosted path is the Demo analyzer.** The observed public `/analyze` responses
+  execute through QuoteCheck's deterministic Demo analyzer — verified live:
+  `metadata.model == "quotecheck-demo-analyzer"`,
+  `metadata.prompt_version == "quotecheck_v0.4"`, `metadata.schema_valid == true`,
+  HTTP 200. The hosted Demo is *intended* to run with `QUOTECHECK_USE_OPENAI=0` and no
+  `OPENAI_API_KEY` (setup guidance, per the README); the Railway variable state was
+  not inspected from the closeout environment, so the runtime-provenance fields above
+  (not an environment dump) are the evidence that the request did not take the OpenAI
+  path.
+- **`railpack.json` (Railway build manifest).** Added because Railpack 0.38.0 could
+  not auto-detect a Python app from the repository root: the app is at
+  `backend/app.py`, requirements at `backend/requirements.txt`, there is no root
+  `requirements.txt` / `pyproject.toml`, and the validated import contract is
+  repo-root (`backend.app:app`, `backend.core.*`) so pointing Railway's root at
+  `/backend` was not an option. The manifest forces the Python provider, pins Python
+  3.11, stages `backend/requirements.txt` into the install step, builds `/app/.venv`,
+  installs into it, carries `.venv` into the deploy image, and starts
+  `/app/.venv/bin/python -m uvicorn backend.app:app --host 0.0.0.0 --port $PORT`. It
+  was chosen over restructuring the app, adding Docker, adding a Procfile, or moving
+  requirements. The first version failed Railpack schema validation
+  (`json: cannot unmarshal string into Go struct field
+  Config.steps.deployOutputs of type plan.Filter`); `deployOutputs` was repaired from
+  a bare string to a filter object (`{"include": [".venv"]}`).
+- **Runtime start confirmed.** Railway logs showed `Application startup complete.` /
+  `Uvicorn running on http://0.0.0.0:8080` (human-observed during deployment).
+- **CORS.** Configured for the exact Vercel production origin
+  `https://quotecheck-frontend.vercel.app`. Verified live: preflight from that origin
+  returns `access-control-allow-origin: https://quotecheck-frontend.vercel.app`;
+  preflight from `https://example.com` returns HTTP 400 with **no**
+  `access-control-allow-origin` header. There was a brief propagation/restart window
+  after the origin was updated on Railway where the old value was still in effect;
+  it resolved once Railway applied the new environment.
+- **End-to-end browser test** (human-observed): production frontend loaded, a quote
+  was submitted, the Railway backend was reached, and the analysis rendered in the
+  browser.
+- **`frontend/.gitignore`.** Adds `.vercel` so local Vercel CLI linkage metadata
+  stays out of Git. Only change to that file.
+- **Ephemeral logs unchanged.** Hosted `logs/app_runs.jsonl` is written to the
+  platform's local filesystem — not durable or centralized. No change here.
+
+Remaining after QC-2B: no public rate limiting / quota control; no durable or
+centralized logging; public OpenAI mode still not exposed anonymously (and not the
+observed hosted path); semantic (Layer B) evaluation still manual; the 3 known
+deterministic Demo residuals (`AUTO-004`, `CONT-003`, `HVAC-003`) remain. **QC-5
+(final public inspection) is the next task and was not started.**
 
 ### Added in QC-2A
 
