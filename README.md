@@ -177,49 +177,75 @@ response; no OpenAI call was made to produce it.
 
 ---
 
-## Deploying the public Demo
+## Public demo deployment
 
-The first public deployment is intentionally **Demo-only** — no OpenAI key, no paid
-inference:
+QuoteCheck is deployed publicly as a portfolio demo:
+
+| | URL |
+|---|---|
+| Live frontend | https://quotecheck-frontend.vercel.app |
+| Public API backend | https://quotecheck-v0-production.up.railway.app |
 
 ```
-Browser → Vercel frontend → HTTPS → Railway FastAPI backend → Demo analyzer → QuoteCheckResult
+Browser → Vercel frontend → HTTPS → Railway FastAPI backend → deterministic Demo analyzer → QuoteCheckResult
 ```
 
-QC-2A makes the repository deployment-ready; the actual deploy and live smoke
-verification happen in QC-2B. There is **no live demo or production deployment yet**,
-and no public URL.
+The hosted public demo intentionally runs the deterministic **Demo analyzer** so the
+deployment is reproducible and makes no external model call: anyone hitting the public
+API gets a real, schema-valid `QuoteCheckResult` with no provider request behind it.
+The observed public `/analyze` responses execute through QuoteCheck's deterministic
+Demo analyzer (`metadata.model = "quotecheck-demo-analyzer"`,
+`metadata.prompt_version = "quotecheck_v0.4"`). OpenAI mode remains an optional
+repository capability for local use (see
+[Demo mode vs. OpenAI mode](#demo-mode-vs-openai-mode)); it is not the path exercised
+by the public demo.
+
+This is a public demonstration, not a production service: no scale or uptime
+guarantees, no accounts or customer data, no persistent hosted logs, no public rate
+limiting, and no anonymous access to paid inference.
+
+### How it is wired
 
 **Frontend (Vercel):**
 
-- Root directory: `frontend/`
-- Build environment variable: `VITE_API_BASE_URL=<Railway backend HTTPS URL>`
+- Project root directory: `frontend/`
+- Build environment variable: `VITE_API_BASE_URL=https://quotecheck-v0-production.up.railway.app`
   (browser-visible — never a secret)
 
-**Backend (Railway):** run from the repo root (no `--reload`):
+**Backend (Railway):** a minimal repo-root [`railpack.json`](railpack.json) drives the
+build. QuoteCheck's import contract is repo-root based (`backend.app:app`,
+`backend.core.*`) while the app and its requirements live under `backend/`, and there
+is no root `requirements.txt` / `pyproject.toml`, so Railpack's Python auto-detection
+does not fire from the repository root. Rather than restructure the app, add Docker,
+or move requirements, the manifest forces the Python provider, pins Python 3.11,
+stages `backend/requirements.txt`, builds `/app/.venv`, installs into it, carries
+`.venv` into the deploy image, and starts:
 
 ```bash
-uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+/app/.venv/bin/python -m uvicorn backend.app:app --host 0.0.0.0 --port $PORT
 ```
 
-Environment:
+Backend environment — how the hosted Demo is meant to be set (deployment guidance,
+not an inspection of the running Railway environment):
 
 | Variable | Value |
 |---|---|
-| `QUOTECHECK_USE_OPENAI` | `0` |
-| `QUOTECHECK_ALLOWED_ORIGINS` | the exact Vercel frontend origin, e.g. `https://your-frontend.vercel.app` (comma-separate multiples; `*` is rejected) |
+| `QUOTECHECK_USE_OPENAI` | `0` (select the Demo analyzer) |
+| `QUOTECHECK_ALLOWED_ORIGINS` | the exact Vercel frontend origin, `https://quotecheck-frontend.vercel.app` (comma-separate multiples; `*` is rejected) |
 | `PORT` | supplied by Railway |
-| `OPENAI_API_KEY` | **do not set** — omitting it is a deliberate cost/safety boundary |
+| `OPENAI_API_KEY` | leave unset — the public demo is not meant to reach paid inference |
 
-`backend/.env` is untracked and absent in the hosted environment; the backend reads
+The live check that actually holds is runtime provenance: public `/analyze` responses
+come back with `metadata.model = "quotecheck-demo-analyzer"`, i.e. served by the
+deterministic Demo analyzer, not the OpenAI path.
+
+`backend/.env` is untracked and not used in the hosted environment; the backend reads
 its configuration from these platform environment variables. Run-log output
 (`logs/app_runs.jsonl`) is written to the host's local, ephemeral filesystem — it is
 not durable or centralized observability. Maximum accepted `quote_text` length is
-**12,000 characters** (server-enforced; see [API](#api)). OpenAI mode remains
-available for local use and is unaffected by this deployment shape.
-
-No committed platform manifest (`Procfile` / `railway.json` / `vercel.json`) is
-included yet — QC-2B adds the smallest one only if the real workflow requires it.
+**12,000 characters** (server-enforced; see [API](#api)). CORS is configured for the
+exact Vercel production origin only; other origins receive no permissive
+`access-control-allow-origin` header.
 
 ---
 
@@ -410,11 +436,12 @@ cases guard domain leakage and unsupported price judgment.
 
 - Not production-ready: no auth, no database, no persistence beyond the local JSONL
   log, no SLAs, no production-scale monitoring or load testing. OpenAI-mode failures
-  are now explicitly classified, bounded, and logged (QC-4), and QC-2A made the repo
-  deployable in Demo mode (configurable frontend backend URL, configurable exact CORS
-  origins, a 12,000-character `quote_text` cap), but there is still no verified public
-  deployment or URL, no public rate limiting / quota control, and no durable or
-  centralized logging. Public OpenAI mode stays intentionally disabled.
+  are now explicitly classified, bounded, and logged (QC-4). QuoteCheck is deployed
+  publicly as a Demo-analyzer demonstration (QC-2B — see
+  [Public demo deployment](#public-demo-deployment)), but there is still no public
+  rate limiting / quota control and no durable or centralized logging (hosted run
+  logs are local and ephemeral). The public demo does not expose paid OpenAI
+  inference; OpenAI mode stays a local-only, opt-in capability.
 - Paste-text input only — no PDF/OCR/image ingestion.
 - No market-price benchmarking, and no objective price-fairness judgment — QuoteCheck
   describes only what the quote itself states.
@@ -464,6 +491,8 @@ A few deliberate choices in this early implementation:
 ## Repo structure (high level)
 
 ```
+railpack.json        (Railway build manifest — Python provider, staged backend/requirements.txt)
+
 backend/
   app.py
   core/
@@ -524,11 +553,11 @@ docs/
 
 ## Roadmap
 
-1. Deployment: QC-2A made the repo deployable in Demo mode (configurable frontend
-   backend URL, configurable exact CORS origins, a 12,000-character input cap). Still
-   open — QC-2B's live Vercel + Railway deploy and smoke verification, then public
-   rate limiting / quota control and durable/centralized logging before OpenAI mode
-   could ever be exposed anonymously
+1. Deployment: QC-2A made the repo deployable in Demo mode; QC-2B deployed it
+   publicly (Vercel frontend + Railway backend, Demo analyzer, live smoke
+   verification — see [Public demo deployment](#public-demo-deployment)). Still open —
+   QC-5 final public inspection, then public rate limiting / quota control and
+   durable/centralized logging before OpenAI mode could ever be exposed anonymously
 2. Eval: semantic Layer B review pass against `eval/rubric.md`; CI wiring for the
    deterministic runner (the runner and its Demo baseline exist)
 3. Cost controls: output token caps, shorter rationales, caching hooks, batch eval runs
