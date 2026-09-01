@@ -30,6 +30,24 @@ file is a summary, not a replacement for either.
 - **Observability from day one.** Every request appends one JSONL record to
   `logs/app_runs.jsonl` (request_id, prompt version, model, latency, schema validity,
   risk counts, uncertainty, error).
+- **Deterministic eval + regression harness.** `eval/` ships a 27-case synthetic
+  quote corpus, a deterministic zero-cost Demo-mode runner (`python -m eval.run_eval`),
+  and a separate human semantic rubric (`eval/rubric.md`). The committed Demo baseline
+  (`eval/results/summary_20260829T115912Z.md`, QC-3C) is **27/27 schema-valid, 24/27
+  deterministic checks passing**; the three known residuals (`AUTO-004`, `CONT-003`,
+  `HVAC-003`) are retained, not excluded. Two permanent regression cases guard domain
+  leakage and unsupported price judgment.
+- **Harness self-tests.** ~144 stdlib `unittest` tests
+  (`python -m unittest discover -s eval/tests -p 'test_*.py'`), reproduced during the
+  QC-5 inspection.
+- **Live public Demo deployment.** Frontend on Vercel
+  (`https://quotecheck-frontend.vercel.app`) and backend on Railway
+  (`https://quotecheck-v0-production.up.railway.app`), verified end-to-end in the
+  browser. The observed public hosted path executed through the deterministic Demo
+  analyzer (`metadata.model == "quotecheck-demo-analyzer"`,
+  `prompt_version == "quotecheck_v0.4"`, `schema_valid == true`). OpenAI mode remains
+  an optional repository capability and was not the path observed during public
+  deployment verification.
 - **Ticket + review-bundle discipline.** Every change is scoped to a ticket in
   `docs/tickets/` with a review bundle in `docs/review/` recording exact commands and
   real output — the project's full history is auditable.
@@ -59,15 +77,22 @@ file is a summary, not a replacement for either.
 - **No committed environment lockfile.** Only a pinned `backend/requirements.txt`;
   reproducibility depends on the developer using a compatible Python 3.10+
   environment.
-- **No automated test suite, eval harness, or CI.** The `examples/` pack is a
-  manually curated sample set, not scored evaluation.
+- **Semantic grading is still manual, and there is no CI.** The deterministic
+  Layer A eval runner and the ~144 stdlib harness tests exist and run, but Layer B
+  (semantic faithfulness / calibration / usefulness) is a human pass against
+  `eval/rubric.md`, and nothing runs automatically on push or PR.
+- **The public deployment is a portfolio Demo, not a service.** No scale or uptime
+  guarantee, no accounts or customer data, no durable or centralized logging (hosted
+  `logs/app_runs.jsonl` is written to the platform's local, ephemeral filesystem), and
+  no public rate limiting / quota control. The observed hosted path is the
+  deterministic Demo analyzer; OpenAI mode is a local, opt-in repository capability and
+  was not the observed public path.
 - **No repair/retry on schema-validation failure** if a model output doesn't match
   the contract.
 - **No market-price benchmarking and no objective price-fairness judgment.**
   QuoteCheck describes only what the quote states.
 - **No vendor verification.** Vendor claims are not checked against external
   authoritative sources; vendor trustworthiness is not assessed.
-- **No verified public deployment.**
 
 ## What should not be overclaimed
 
@@ -86,11 +111,14 @@ file is a summary, not a replacement for either.
 
 Tracked as future work; none of this is implemented today:
 
-- Automated eval / regression harness with scored semantic checks.
+- Scored semantic (Layer B) checks — the deterministic Layer A harness exists; only
+  the semantic scoring is future work.
+- CI wiring that runs the existing verification commands on push / PR (QC-5B).
 - Bounded repair/retry when a model response fails schema validation.
 - Broader, de-vehicled result taxonomy.
 - Production-scale monitoring and load testing.
-- A verified public deployment.
+- Public rate limiting / quota control and durable, centralized logging — required
+  before OpenAI mode could ever be exposed anonymously.
 
 For the exact current architecture, commands, and full gap list, see
 [`docs/CURRENT_STATE.md`](CURRENT_STATE.md).

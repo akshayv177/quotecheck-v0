@@ -301,14 +301,26 @@ thin".
 
 **This corpus targets the intended QuoteCheck product contract, not the current Demo
 stub's keyword heuristics.** Demo mode (`backend/core/stub_analyzer.py`) is a small fixed
-keyword matcher, not language understanding, and it will fail some cases by construction:
+keyword matcher, not language understanding, so it still diverges from the contract on a
+few cases by construction:
 
-- `ambiguous_items_present` is hardcoded `true`, so the six `clean_itemized` cases will
-  fail their `ambiguous_items_present == false` assertion in Demo mode;
-- `missing_quote_context` is derived from a fixed phrase list, so it will disagree with
-  cases whose missing context is real but differently worded;
+- `missing_quote_context` is derived from a fixed deferred-detail phrase list, so it
+  disagrees with a case whose missing context is real but differently worded — `AUTO-004`
+  (a symptom-only safety recommendation carrying no explicit deferred/omitted-detail
+  phrasing);
+- the analyzer emits at most one coarse line item per matched domain, so conditional
+  uncertainty confined to a single sub-line cannot be flagged as
+  `ambiguous_items_present` without over-flagging the whole quote — `CONT-003` and
+  `HVAC-003`;
 - domains outside the keyword list (electronics, most generic service) fall through to a
   single "needs clarification" item.
+
+Since QC-3C, `ambiguous_items_present` is **derived** from line-item ambiguity
+(`any(item.vague_or_confusing for item in line_items)`), not hardcoded `true`, so the six
+`clean_itemized` cases now **pass** their `ambiguous_items_present == false` assertion in
+Demo mode. The committed Demo baseline is **27/27 schema-valid, 24/27 deterministic
+cases pass**, with exactly the three residuals above (`AUTO-004`, `CONT-003`,
+`HVAC-003`).
 
 These are **real, already-documented product gaps** (see `docs/CURRENT_STATE.md`), not
 broken cases. They are deliberately left in.
