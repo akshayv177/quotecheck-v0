@@ -1,5 +1,14 @@
 # UI_REDESIGN_PLAN.md — LUXURY-UI-001
 
+> **Historical design document — pre-implementation plan.** This is the design
+> plan written *before* LUXURY-UI-001 was built. The shipped UI (LUXURY-UI-001
+> and the follow-up LUXURY-UI-001A) superseded parts of it — for example the
+> "v0 prototype" chip described below was removed, and the "55s" client timeout
+> was later raised to 70s in QC-4. Current UI behaviour is defined by the
+> implementation, `README.md`, and `docs/CURRENT_STATE.md`, not by this file.
+> The historical content below is left intact and should not be read as a
+> description of the current UI.
+
 Design plan for the final public-polish pass on the QuoteCheck frontend. Companion to
 `docs/tickets/LUXURY-UI-001-distinctive-public-ui.md` (which holds the binding scope
 and acceptance criteria). Design-only: no backend, API, schema, or feature changes.

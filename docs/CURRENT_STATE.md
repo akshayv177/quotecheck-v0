@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-08-31 (QC-2B)
+Last updated: 2026-09-01 (QC-5A)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -302,6 +302,44 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-5A
+
+Documentation truth-sync after the QC-5 final public inspection
+(`docs/review/REVIEW_BUNDLE__QC-5-final-public-inspection.md`). **Prose only —
+no application, frontend, backend, `railpack.json`, dependency, schema, prompt
+(`PROMPT_VERSION` stays `quotecheck_v0.4`), Demo-analyzer, eval-corpus,
+eval-results, or deployment change.** Four docs edited plus the QC-5A ticket +
+review bundle.
+
+- QC-5 found stale public-document truth issues: `docs/PROJECT_STATUS.md` (the
+  doc the README nominates as the honest summary) denied the eval harness ("No
+  automated test suite, eval harness, or CI") and the public deployment ("No
+  verified public deployment"), and listed "a verified public deployment" under
+  *Planned hardening* (QC5-01, P1); `eval/README.md` "Expected Demo-mode
+  behaviour" still claimed `ambiguous_items_present` is hardcoded `true` and the
+  six `clean_itemized` cases fail, contradicting the committed QC-3C baseline
+  cited lower in the same file (QC5-02, P2).
+- QC-5A repaired both. `docs/PROJECT_STATUS.md` now lists the deterministic eval
+  runner + 27-case corpus + ~144 stdlib harness tests and the live Vercel +
+  Railway Demo deployment under *What's public-ready*, with the genuine residual
+  limits kept visible (semantic Layer B grading is manual, no CI, hosted logs
+  are ephemeral, no public rate limiting, not production-grade). `eval/README.md`
+  "Expected Demo-mode behaviour" now states `ambiguous_items_present` is derived
+  (since QC-3C), the `clean_itemized` cases pass, and the baseline is 24/27
+  deterministic / 27/27 schema-valid with residuals `AUTO-004`, `CONT-003`,
+  `HVAC-003`. The eval corpus, rubric, termsets, results, graders, and runner
+  were not touched.
+- `docs/design/UI_REDESIGN_PLAN.md` gained a short header marking it a historical
+  pre-implementation design plan superseded in part by the shipped
+  LUXURY-UI-001 / 001A (e.g. the "v0 prototype" chip it describes was removed;
+  its "55s" client timeout was later raised to 70s in QC-4). Its body is
+  unchanged (QC5-04, P2).
+- Hosted-mode wording follows observed runtime provenance
+  (`metadata.model == "quotecheck-demo-analyzer"`), not an inspection of the
+  Railway environment — the QC-5A task did not read Railway's variables.
+- No runtime behaviour changed. Repository-level CI (QC5-09) is the next repair
+  (QC-5B) and was not started.
 
 ### Added in QC-2B
 
