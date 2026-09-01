@@ -1,0 +1,135 @@
+name: QuoteCheck CI
+
+# Runs QuoteCheck's EXISTING verification surface automatically:
+#   - backend/eval: harness self-tests, corpus validation, and the Demo-eval
+#     accepted-baseline gate (deterministic, zero cost, no provider calls)
+#   - frontend: the existing npm lint + build
+# No new tests, no dependency changes, no deployment, no paid inference.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-eval:
+    runs-on: ubuntu-latest
+    env:
+      # Force deterministic, zero-cost Demo mode. This workflow references no
+      # secret and provides no OPENAI_API_KEY, so no paid provider path is
+      # reachable from this job.
+      QUOTECHECK_USE_OPENAI: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend + eval dependencies
+        run: python -m pip install -r backend/requirements.txt
+
+      - name: Harness self-tests
+        run: python -m unittest discover -s eval/tests -p 'test_*.py'
+
+      - name: Corpus validation
+        run: python -m eval.run_eval --validate-only
+
+      - name: Demo eval - accepted-baseline gate
+        run: |
+          set -euo pipefail
+          SCRATCH="$(mktemp -d)"
+          echo "Demo eval -> $SCRATCH (the runner exits non-zero by design: 3 accepted residuals)"
+          set +e
+          python -m eval.run_eval --mode demo --results-dir "$SCRATCH"
+          RUNNER_RC=$?
+          set -e
+          echo "runner exit code: $RUNNER_RC"
+          RUNNER_RC="$RUNNER_RC" SCRATCH="$SCRATCH" python - <<'PY'
+          import glob
+          import json
+          import os
+          import sys
+
+          scratch = os.environ["SCRATCH"]
+          runner_rc = int(os.environ["RUNNER_RC"])
+
+          runs = glob.glob(os.path.join(scratch, "run_*.jsonl"))
+          if len(runs) != 1:
+              sys.exit(f"FAIL: expected exactly one run_*.jsonl in {scratch}, found {runs}")
+
+          with open(runs[0], encoding="utf-8") as fh:
+              records = [json.loads(line) for line in fh if line.strip()]
+
+          EXPECTED_TOTAL = 27
+          EXPECTED_SCHEMA_VALID = 27
+          EXPECTED_DETERMINISTIC_PASSES = 24
+          EXPECTED_RESIDUALS = {"AUTO-004", "CONT-003", "HVAC-003"}
+
+          total = len(records)
+          schema_valid = sum(1 for r in records if r["schema_pass"])
+          deterministic_passes = sum(1 for r in records if r["deterministic_pass"])
+          execution_errors = sorted(r["case_id"] for r in records if r.get("execution_error"))
+          residuals = {r["case_id"] for r in records if not r["deterministic_pass"]}
+
+          problems = []
+          if total != EXPECTED_TOTAL:
+              problems.append(f"case count {total} != {EXPECTED_TOTAL}")
+          if schema_valid != EXPECTED_SCHEMA_VALID:
+              problems.append(f"schema-valid {schema_valid} != {EXPECTED_SCHEMA_VALID}")
+          if deterministic_passes != EXPECTED_DETERMINISTIC_PASSES:
+              problems.append(
+                  f"deterministic passes {deterministic_passes} != {EXPECTED_DETERMINISTIC_PASSES}"
+              )
+          if residuals != EXPECTED_RESIDUALS:
+              problems.append(
+                  f"failing set {sorted(residuals)} != {sorted(EXPECTED_RESIDUALS)}"
+              )
+          if execution_errors:
+              problems.append(f"execution errors present: {execution_errors}")
+          if runner_rc == 0:
+              problems.append(
+                  "runner exited 0; the 3 accepted residuals must still make it exit non-zero"
+              )
+
+          print(
+              f"cases={total} schema_valid={schema_valid} "
+              f"deterministic_pass={deterministic_passes} "
+              f"failing={sorted(residuals)} runner_rc={runner_rc}"
+          )
+
+          if problems:
+              sys.exit("ACCEPTED DEMO BASELINE VIOLATED:\n  - " + "\n  - ".join(problems))
+
+          print(
+              "Accepted Demo baseline intact: 27/27 schema-valid, 24/27 deterministic, "
+              "residuals AUTO-004 / CONT-003 / HVAC-003."
+          )
+          PY
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run build

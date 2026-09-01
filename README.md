@@ -236,6 +236,10 @@ product contract. It says nothing about model quality, hallucination rate, or
 correctness. Failing cases are visible in the runner's non-zero exit and in the
 committed summary rather than xfailed or dropped from the denominator.
 
+The CI workflow re-runs the corpus validation and the Demo eval and asserts this
+baseline exactly — 27/27 schema-valid, 24/27 deterministic, residuals `AUTO-004` /
+`CONT-003` / `HVAC-003`, runner still non-zero; any other outcome fails the build.
+
 Design rationale, check-by-check strength assessment, and CLI usage:
 [`eval/README.md`](eval/README.md).
 
@@ -279,8 +283,10 @@ anonymous access to paid inference.
   sources, and vendor trustworthiness is not assessed.
 - No authentication, user accounts, or persistent database; no history beyond the
   local JSONL run log.
-- Semantic (Layer B) evaluation is a manual human pass; only the deterministic Layer A
-  runner is automated, and nothing runs on push or PR yet.
+- Semantic (Layer B) evaluation is a manual human pass. A GitHub Actions workflow
+  ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) is configured to run the
+  deterministic Layer A runner, the harness self-tests, and the frontend lint/build on
+  pull requests and pushes to `main`; it has no deploy step and runs no paid inference.
 - Hosted `logs/app_runs.jsonl` is written to the platform's local, ephemeral
   filesystem — not durable or centralized observability.
 - No public rate limiting or quota control.

@@ -77,10 +77,16 @@ file is a summary, not a replacement for either.
 - **No committed environment lockfile.** Only a pinned `backend/requirements.txt`;
   reproducibility depends on the developer using a compatible Python 3.10+
   environment.
-- **Semantic grading is still manual, and there is no CI.** The deterministic
-  Layer A eval runner and the ~144 stdlib harness tests exist and run, but Layer B
-  (semantic faithfulness / calibration / usefulness) is a human pass against
-  `eval/rubric.md`, and nothing runs automatically on push or PR.
+- **Semantic grading is still manual; CI is minimal.** The deterministic
+  Layer A eval runner and the ~144 stdlib harness tests exist and run. A GitHub
+  Actions workflow (`.github/workflows/ci.yml`) is configured to run those checks —
+  the harness self-tests, the corpus validation, a Demo-eval step that asserts the
+  accepted baseline exactly (27/27 schema-valid, 24/27 deterministic, residuals
+  `AUTO-004` / `CONT-003` / `HVAC-003`), and the frontend lint/build — on pull
+  requests and pushes to `main`. It does not deploy the app and does not run paid
+  OpenAI inference (Demo mode is forced, no provider secret is referenced). Layer B
+  (semantic faithfulness / calibration / usefulness) is still a human pass against
+  `eval/rubric.md`.
 - **The public deployment is a portfolio Demo, not a service.** No scale or uptime
   guarantee, no accounts or customer data, no durable or centralized logging (hosted
   `logs/app_runs.jsonl` is written to the platform's local, ephemeral filesystem), and
@@ -113,7 +119,8 @@ Tracked as future work; none of this is implemented today:
 
 - Scored semantic (Layer B) checks — the deterministic Layer A harness exists; only
   the semantic scoring is future work.
-- CI wiring that runs the existing verification commands on push / PR (QC-5B).
+- Deeper CI than the QC-5B minimal workflow — semantic Layer B scoring in the
+  pipeline, a Python/Node version matrix, and coverage reporting.
 - Bounded repair/retry when a model response fails schema validation.
 - Broader, de-vehicled result taxonomy.
 - Production-scale monitoring and load testing.
