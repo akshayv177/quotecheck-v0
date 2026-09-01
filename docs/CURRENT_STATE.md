@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-01 (QC-5R)
+Last updated: 2026-09-01 (QC-5B)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -256,11 +256,16 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
 - No committed `environment.yml`/lockfile — only a pinned `backend/requirements.txt`.
   Reproducibility depends on the developer activating a compatible Python 3.10+
   environment themselves (README documents a conda-based path).
-- No CI. A deterministic eval/regression runner exists (`eval/`, QC-3B) with stdlib
-  self-tests, plus focused Demo-analyzer unit tests added in QC-3C
-  (`eval/tests/test_stub_analyzer.py`). Semantic (Layer B) grading remains manual.
-  QC-3C repaired the largest application-level Demo gaps the QC-3B baseline exposed
-  (11/27 → 24/27 deterministic contract pass); 3 documented limitations remain.
+- Minimal CI (QC-5B). A GitHub Actions workflow (`.github/workflows/ci.yml`) is
+  configured to run the existing verification surface — the stdlib harness
+  self-tests, `python -m eval.run_eval --validate-only`, a Demo-eval step that
+  asserts the accepted baseline exactly (27/27 schema-valid, 24/27 deterministic,
+  residuals `AUTO-004` / `CONT-003` / `HVAC-003`), and the frontend
+  `npm ci` / `lint` / `build` — on pull requests and pushes to `main`. It adds no
+  test framework and no dependency, has no deploy step, and runs no paid OpenAI
+  inference (Demo mode forced, no provider secret). Semantic (Layer B) grading
+  remains a manual human pass. The QC-3C repair improved the deterministic contract
+  pass count from 11/27 to 24/27; the 3 documented residuals remain.
 - Public deployment exists (QC-2B): frontend on Vercel
   (`https://quotecheck-frontend.vercel.app`), backend on Railway
   (`https://quotecheck-v0-production.up.railway.app`), verified end-to-end in the
@@ -306,6 +311,37 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-5B
+
+Minimal GitHub Actions CI (`.github/workflows/ci.yml`). **Workflow + docs only —
+no backend, frontend, eval, examples, dependency, schema, prompt (`PROMPT_VERSION`
+stays `quotecheck_v0.4`), or deployment change. No runtime behaviour change.**
+
+- Triggers: `pull_request` and `push` to `main`. `permissions: contents: read`
+  (no write scope). No `secrets.*` reference anywhere in the file.
+- `backend-eval` job — Python 3.11, dependencies from `backend/requirements.txt`
+  only (`python -m pip install -r backend/requirements.txt`; no pip self-upgrade),
+  `QUOTECHECK_USE_OPENAI=0`. Runs the existing commands:
+  `python -m unittest discover -s eval/tests -p 'test_*.py'`,
+  `python -m eval.run_eval --validate-only`, then a Demo-eval step that runs the
+  existing runner into a scratch `--results-dir` (never `eval/results/`) and
+  asserts the accepted baseline exactly with a stdlib-only parser of the runner's
+  own `run_*.jsonl`: 27 records, 27 schema-valid, 24 deterministic passes, failing
+  set exactly `{AUTO-004, CONT-003, HVAC-003}`, zero execution errors, runner exit
+  non-zero. Any other outcome fails CI — no blanket failure suppression, no xfail,
+  no change to the residual set or the runner.
+- `frontend` job — Node 22 LTS (the project declares no `engines`; Vite 7 needs
+  Node `^20.19 || >=22.12`), npm cache keyed on the committed
+  `frontend/package-lock.json`, working directory `frontend`. Runs the existing
+  `npm ci` / `npm run lint` / `npm run build`.
+- No new test framework, no dependency change, no deployment automation, no paid
+  inference, no artifact upload, no `npm audit` gate.
+- Semantic Layer B evaluation remains a human pass against `eval/rubric.md`.
+- Verification status at implementation time: workflow YAML and every underlying
+  command verified locally; the first real GitHub Actions run is pending the
+  user's push and is required for final QC-5B closure. The QC-5 repair set is
+  otherwise complete pending that release verification.
 
 ### Added in QC-5R
 
