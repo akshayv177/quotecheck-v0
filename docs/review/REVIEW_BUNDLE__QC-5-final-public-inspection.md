@@ -5,7 +5,9 @@ Branch: `task/QC-5-final-public-inspection` (based on `main` @ `c3422e4`).
 Nothing committed. This is an inspection report; no finding was repaired.
 
 Inspection performed: 2026-08-31. Live probes and the fresh-clone build were run
-the same day; timestamps are in each section.
+the same day; timestamps are in each section. A human desktop visual and
+core-flow check of the live frontend was completed after the automated inspection
+(§3.2) — human-observed, not browser-automation evidence.
 
 ---
 
@@ -76,15 +78,17 @@ architecture, or dependencies.
 
 ### 2.2 What could not be done
 
-- **In-browser visual / mobile / accessibility inspection** of the live React app
-  (no browser automation available and none was introduced). The HTML shell, the
-  built JS/CSS, and the backend it talks to were inspected; the rendered report,
-  responsive behaviour, loading/error states, and reduced-motion behaviour are
-  **human-verification items** (§3.2).
-- **Confirming `docs/assets/quotecheck-ui.png` matches the current deployed UI** —
-  requires a visual comparison. The screenshot commit (`fae2b1e`) post-dates the
-  LUXURY-UI-001/001A redesign, so it is *probably* current, but this was not
-  visually verified.
+- **Formal accessibility testing** of the live React app (screen-reader flow,
+  keyboard navigation / focus traps, contrast audit), plus **narrow-viewport
+  (~375px) responsive behaviour** and **`prefers-reduced-motion` behaviour**.
+  A human desktop visual + core-flow pass *was* completed post-inspection (§3.2);
+  these specific checks were not part of it. No browser automation was available
+  or introduced.
+- **Exact side-by-side comparison of `docs/assets/quotecheck-ui.png` against the
+  current deployed UI.** The screenshot commit (`fae2b1e`) post-dates the
+  LUXURY-UI-001/001A redesign and the desktop UI was observed to render correctly
+  (§3.2), so the screenshot is very likely current, but a pixel/layout comparison
+  was not done.
 - **OpenAI-mode live behaviour** — out of scope (no key; the public demo does not
   expose paid inference by design). The OpenAI path was inspected by source
   reading only.
@@ -119,22 +123,37 @@ envelope the README documents; none leak a stack trace, key, provider payload, o
 internal filename. `latency_ms` is `0` in every Demo response (the analyzer does no
 I/O — documented).
 
-### 3.2 Requires human verification (browser, ~2–5 min)
+### 3.2 Human-observed — desktop, post-inspection
 
-1. Frontend renders the full report: line-item cards with `explanation` prominent,
-   risk pills, "Needs clarification" badge on the misc charge, evidence list,
-   "Questions to ask the vendor" / "Things to verify before approving",
-   always-visible disclaimer, "Demo mode" badge, collapsed raw-JSON drawer.
-2. Empty-textarea state: the "Analyze quote" button is disabled at
-   `quoteText.trim().length === 0` (verified in source; not exercised in browser).
-3. Loading state (staged labels + elapsed counter + `aria-live`), and the styled
-   error card when the backend is unreachable.
-4. Responsive layout at ~375px (the `.two-col-grid` collapses at `max-width:720px`
-   per `index.css`); no horizontal overflow.
-5. `prefers-reduced-motion: reduce` suppresses the report reveal animation.
-6. `docs/assets/quotecheck-ui.png` still depicts the current deployed UI.
-7. Browser-console cleanliness (a missing favicon request is expected — see
-   QC5-06).
+The production frontend (`https://quotecheck-frontend.vercel.app`) was visually
+inspected by a human on desktop after the automated inspection. This is
+human-observed evidence, not browser-automation evidence.
+
+Observed OK:
+
+1. Page layout renders correctly and the rendered analysis result looked correct
+   (line-item cards, risk badges, the "Before you approve" section, the
+   always-visible disclaimer, the run-metadata line with the mode badge, the
+   collapsed raw-JSON drawer).
+2. Multiple different quotes were submitted successfully; each returned and
+   rendered a report — the paste → Analyze → report core flow works.
+3. No obvious visual breakage and no core-flow issue was observed.
+
+Not covered by this desktop pass (still unverified):
+
+4. Formal accessibility testing — screen-reader flow, keyboard navigation / focus
+   traps, contrast audit.
+5. Narrow-viewport (~375px) responsive behaviour — `.two-col-grid` collapses at
+   `max-width:720px` per `index.css`, confirmed in source but not exercised in a
+   resized browser.
+6. `prefers-reduced-motion: reduce` suppressing the report-reveal animation
+   (present in `index.css`, not exercised).
+7. Exact side-by-side comparison of `docs/assets/quotecheck-ui.png` with the
+   current deployed UI (see §2.2).
+8. Empty-textarea disabled-button state and the styled unreachable-backend error
+   card were verified in source (`App.jsx`), not deliberately exercised in the
+   browser.
+9. Browser-console cleanliness (a missing-favicon request is expected — QC5-06).
 
 ---
 
@@ -775,8 +794,10 @@ Legitimate future work, **not** v0 blockers:
   — permanent product non-goals, not omissions.
 - Favicon, dev-toolchain advisory cleanup, "(v0)" docstring wording,
   `CURRENT_STATE.md` length (QC5-06 / QC5-07 / QC5-08) — cosmetic; do opportunistically.
-- In-browser visual / mobile / a11y pass and a screenshot-freshness check (§3.2) —
-  human verification; recommended before calling v0 done but not a code/doc change.
+- Narrow-viewport / `prefers-reduced-motion` / formal-accessibility checks and a
+  screenshot-freshness comparison (§3.2) — human verification. A desktop visual +
+  core-flow pass is already done (§3.2, no breakage observed); these remaining
+  checks are recommended before calling v0 done but are not a code/doc change.
 
 ---
 
@@ -798,9 +819,13 @@ documentation/config:
    commands, and update the "no CI" lines. Recommended because the project is
    publicly deployed and the fix is nearly free; if explicitly descoped, record
    that decision rather than leaving it silent.
-4. **Human pass** — one 2–5 minute in-browser check of the live frontend (report
-   render, empty/loading/error states, ~375px responsive, reduced-motion) and a
-   glance that `docs/assets/quotecheck-ui.png` still matches.
+4. **Human pass** — a desktop visual + core-flow check of the live frontend was
+   completed after the automated inspection (§3.2): layout and the rendered
+   report look correct, multiple quotes submit successfully, no visual breakage
+   or core-flow issue. Still worth doing before closure (not blockers): a ~375px
+   responsive check, a `prefers-reduced-motion` check, a screen-reader / keyboard
+   accessibility pass, and a side-by-side check of
+   `docs/assets/quotecheck-ui.png`.
 
 No P0, no code changes, no architecture work, no dependency changes, and no
 new product scope are required. After QC-5A–QC-5C and the human pass, QuoteCheck
