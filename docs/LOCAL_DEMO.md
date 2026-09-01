@@ -9,7 +9,20 @@ you are in the repo root unless a step says otherwise.
 git status --short
 ```
 
-## 2. Start the backend in Demo mode (no API key, no cost)
+## 2. Install the backend dependencies
+
+Requires Python 3.10+ and Node 20.19+ (Vite 7). From the repo root, in a fresh
+environment:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
+```
+
+Any compatible Python 3.10+ environment works (conda included); there is no committed
+lockfile.
+
+## 3. Start the backend in Demo mode (no API key, no cost)
 
 ```bash
 QUOTECHECK_USE_OPENAI=0 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
@@ -17,7 +30,7 @@ QUOTECHECK_USE_OPENAI=0 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8
 
 Leave this running in its own terminal.
 
-## 3. Verify the backend is healthy
+## 4. Verify the backend is healthy
 
 In a second terminal, from the repo root:
 
@@ -27,7 +40,7 @@ curl http://localhost:8000/health
 
 Expect `{"status":"ok"}`.
 
-## 4. Run `/analyze` against a sample quote
+## 5. Run `/analyze` against a sample quote
 
 Still from the repo root (the command below reads a relative path and will fail
 silently if run elsewhere):
@@ -40,7 +53,7 @@ curl -s -X POST http://localhost:8000/analyze -H "Content-Type: application/json
 The response's `metadata.model` should read `"quotecheck-demo-analyzer"`, confirming
 no OpenAI call was made.
 
-## 5. Start the frontend
+## 6. Start the frontend
 
 In a third terminal:
 
@@ -52,7 +65,7 @@ npm run dev -- --host
 
 Open the printed URL (usually `http://localhost:5173`).
 
-## 6. Test the UI
+## 7. Test the UI
 
 - The textarea is pre-filled with a sample quote.
 - Click **Analyze quote**.
@@ -61,25 +74,25 @@ Open the printed URL (usually `http://localhost:5173`).
   verify.
 - Confirm the **"Demo mode"** badge appears next to the run metadata.
 
-## 7. Optional: OpenAI mode
+## 8. Optional: OpenAI mode
 
 Only do this if you intend to make a real, billed API call:
 
 1. `cp backend/.env.example backend/.env`
 2. Edit `backend/.env`: set `QUOTECHECK_USE_OPENAI=1` and a real `OPENAI_API_KEY`.
 3. Restart the backend.
-4. Re-run step 4/6 above and confirm the badge now reads **"OpenAI mode"** and
+4. Re-run steps 5/7 above and confirm the badge now reads **"OpenAI mode"** and
    `metadata.model` matches `QUOTECHECK_MODEL` (default `gpt-4o-mini`).
 5. Switch back to Demo mode (`QUOTECHECK_USE_OPENAI=0`) afterward to avoid further
    billed calls.
 
-## 8. Screenshot
+## 9. Screenshot
 
 A real UI screenshot is committed at
 [`docs/assets/quotecheck-ui.png`](assets/quotecheck-ui.png) and embedded in README's
-[Screenshot](../README.md#screenshot) section. To refresh it:
+[Product preview](../README.md#product-preview) section. To refresh it:
 
-1. Complete steps 2–6 above.
+1. Complete steps 2–7 above.
 2. Capture the rendered report view in your browser.
 3. Overwrite `docs/assets/quotecheck-ui.png` with the new image (keep the same
    filename so README's embed keeps working).

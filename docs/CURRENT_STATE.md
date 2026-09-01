@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-01 (QC-5A)
+Last updated: 2026-09-01 (QC-5R)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -137,9 +137,10 @@ QUOTECHECK_USE_OPENAI=0 uvicorn backend.app:app --reload --host 0.0.0.0 --port 8
 curl http://localhost:8000/health
 ```
 
-(The README also documents conda as an alternative; any Python 3.10+ environment with
-`backend/requirements.txt` installed works. README's quickstart leads with plain `venv`
-as of TASK-009 since it's more universal than assuming conda is installed.)
+(Any Python 3.10+ environment with `backend/requirements.txt` installed works, conda
+included. As of QC-5R the local run guide lives in `docs/LOCAL_DEMO.md` and leads with
+plain `venv` — more universal than assuming conda is installed — and the README links
+to it rather than repeating setup commands.)
 
 Deployment-style Demo start (QC-2A — repo root, no `--reload`, platform-supplied port,
 explicit CORS origin, no OpenAI key configured):
@@ -155,8 +156,10 @@ The public deployment (QC-2B) runs this shape on Railway via a repo-root
 `/app/.venv`, `uvicorn backend.app:app --host 0.0.0.0 --port $PORT`). The frontend
 backend URL is `VITE_API_BASE_URL` (default `http://localhost:8000`; template
 `frontend/.env.example`). `VITE_*` values are embedded in the built bundle and
-browser-visible — no secrets. See the README "Public demo deployment" section for the
-live URLs and the Vercel + Railway configuration matrix.
+browser-visible — no secrets. The README "Live deployment" section carries the live
+URLs and the observed public verification; the full Vercel + Railway configuration
+matrix and the `railpack.json` rationale are in the *Added in QC-2A* / *Added in QC-2B*
+blocks below.
 
 Frontend:
 
@@ -239,13 +242,14 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   pairs spanning vehicle service, AC/appliance repair, home maintenance/contractor,
   a vague-labour/misc parts quote, and a genuinely vague quote (uncertainty
   fallback), indexed in `examples/README.md`. Demo mode only, no OpenAI calls; not
-  an automated eval harness (no pass/fail scoring, no CI) — see Roadmap item 2 in
-  `README.md`.
+  an automated eval harness (no pass/fail scoring, no CI) — that is `eval/` (QC-3B),
+  described in `eval/README.md`.
 - Project-status/run docs (TASK-010): `docs/PROJECT_STATUS.md` (public-ready vs.
   still-limited vs. not-to-overclaim summary) and `docs/LOCAL_DEMO.md` (neutral local
   run guide: start backend/frontend, verify `/health` and `/analyze`, optional OpenAI
-  mode), both linked from README's Limitations section. A real UI screenshot is
-  committed at `docs/assets/quotecheck-ui.png` and embedded in `README.md`.
+  mode), both linked from README's "Documentation" section (QC-5R; previously the
+  Limitations section). A real UI screenshot is committed at
+  `docs/assets/quotecheck-ui.png` and embedded in README's "Product preview" section.
 
 ## Gaps
 
@@ -302,6 +306,52 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in QC-5R
+
+`README.md` refocused for public readers. **Documentation only — no runtime,
+deployment, eval, dependency, schema, prompt (`PROMPT_VERSION` stays
+`quotecheck_v0.4`), or product change.**
+
+- README restructured from a setup-first manual (571 lines) into a public landing
+  page (324 lines): product description → live demo → what it does → product
+  preview → engineering highlights → architecture (with the API contract) →
+  reliability → evaluation → live deployment → limitations → run locally →
+  documentation index.
+- The live demo URL is now above the fold; architecture, engineering evidence,
+  the eval baseline (27/27 schema-valid, 24/27 deterministic, residuals
+  `AUTO-004` / `CONT-003` / `HVAC-003`), reliability behaviour, and the public
+  deployment all precede any local-setup material.
+- Removed or demoted: prerequisite/clone/venv/pip/npm walkthroughs, the `.env`
+  tutorial, localhost sanity-check commands, the `tail logs/app_runs.jsonl`
+  command, the 58-line repo tree, the "What works today" section (duplicated
+  `docs/PROJECT_STATUS.md`), the "Design notes" section (folded into engineering
+  highlights), and the internal-milestone Roadmap (`docs/PROJECT_STATUS.md`
+  "Planned hardening" is the live version). No technical detail was lost —
+  each removed item is already recorded in this file, `docs/LOCAL_DEMO.md`, or
+  `docs/PROJECT_STATUS.md`.
+- `README.md` "Run locally" is now a pointer to `docs/LOCAL_DEMO.md`. Because
+  that guide previously assumed dependencies were already installed, it gained a
+  short "Install the backend dependencies" step (Python 3.10+ venv +
+  `pip install -r backend/requirements.txt`; steps renumbered) so it is
+  self-contained, plus a link fix for the renamed README anchor
+  (`#screenshot` → `#product-preview`). No other change to that file.
+- The `### Demo mode vs. OpenAI mode` heading was deliberately retained (as a
+  compact comparison table) because `examples/README.md` links that anchor and
+  `examples/**` is out of scope.
+- Live verification re-run for this ticket: `/health` 200 `{"status":"ok"}`;
+  `/analyze` 200 with `metadata.model == "quotecheck-demo-analyzer"`,
+  `prompt_version == "quotecheck_v0.4"`, `schema_valid == true`; production-origin
+  CORS preflight allowed, foreign origin 400 with no `access-control-allow-origin`.
+  Hosted-mode statements continue to rest on observed runtime provenance, not an
+  inspection of the Railway environment.
+- Four now-stale cross-references to README sections in this file's *current-state*
+  sections were corrected: the conda/quickstart note, the "Public demo deployment"
+  pointer, "Roadmap item 2 in `README.md`", and "linked from README's Limitations
+  section". Historical `### Added in …` / `### Fixed in …` changelog blocks were left
+  as written — they are dated records, not current-state assertions.
+- Repository-level CI (QC5-09) remains the next repair (**QC-5B**) and was not
+  started.
 
 ### Added in QC-5A
 
