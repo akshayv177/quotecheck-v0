@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-01 (QC-5R)
+Last updated: 2026-09-24 (SCALE-001)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -306,6 +306,51 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Added in SCALE-001
+
+A local, zero-provider-cost capacity-characterization harness (`benchmarks/`)
+and a measured baseline (`docs/scalability/SCALE-001_BASELINE.md`, raw evidence
+in `benchmarks/results/SCALE-001-baseline/`). **Measurement only: no runtime,
+API, schema, prompt, retry/timeout, logging, deployment, dependency or product
+change.** No billed OpenAI call was made, and the public deployment was never
+load-tested.
+
+- **Harness:**
+  - `python -m benchmarks.run_capacity` launches unmodified QuoteCheck as one
+    uvicorn process on 127.0.0.1 (`--loop asyncio --http h11`, matching the
+    production install) and drives a closed-loop concurrency ladder through
+    real localhost HTTP.
+  - OpenAI-mode runs reach a loopback fake Responses endpoint
+    (`benchmarks/fake_provider.py`) through the SDK's own `OPENAI_BASE_URL`,
+    with a sentinel key and model.
+  - Every fake-provider trial is reconciled against QuoteCheck's own
+    `provider_attempts` log.
+  - `python -m benchmarks.stats <run-dir> --check` recomputes summaries from
+    the raw JSONL.
+  - `python -m benchmarks.diag_client_construction` isolates the cost of
+    per-request client construction.
+  - Harness tests are in `eval/tests/test_benchmarks.py` (18 tests).
+- **Findings (local WSL2 host, comparative only, not a production SLA):**
+  - Demo `/analyze` is single-core CPU-bound and flat from C=1–2: about 950 /
+    600–650 / 105 rps for 85 / 641 / 11,465-char inputs.
+  - On the OpenAI path, per-request `OpenAI(...)` construction (SSL context and
+    CA bundle, about 20 ms CPU serially, degrading under thread concurrency)
+    is a major throughput constraint under concurrency; with the 250 ms fake provider, throughput plateaued at about 35–41 analyses/s despite additional concurrency.
+  - Aggregate provider concurrency is bounded only implicitly, by anyio's
+    default 40-thread limiter: peak in flight was 40 at C = 48 and 64.
+  - The two-attempt retry bound holds, and retries double attempts per request
+    while QuoteCheck has no explicit application-level aggregate provider-concurrency budget.
+  - Decision Gate A candidate: reuse one OpenAI client per process (a separate
+    ticket; not implemented).
+- **Pre-existing defect found, not fixed:** the Demo analyzer can emit more
+  than the schema's 8 `verification_questions` for a quote that mixes
+  several trades (e.g. a 127-char brake + AC + tap + panel-earthing +
+  compressor quote), raising a Pydantic `ValidationError`. The route turns this
+  into HTTP 500 `internal_error`. It is recorded in the SCALE-001 review bundle.
+- Demo-mode `metadata.latency_ms` and the logged `latency_ms` are computed
+  before the stub runs (`backend/app.py:193`), so they are ~0 by construction
+  and don't measure analysis time. Recorded, not changed.
 
 ### Added in QC-5R
 
