@@ -1,0 +1,114 @@
+{
+  "openssl": "OpenSSL 3.0.19 27 Jan 2026",
+  "python": "3.11.14 (main, Oct 21 2025, 18:31:21) [GCC 11.2.0]",
+  "results": [
+    {
+      "op": "openai_client",
+      "threads": 1,
+      "ops": 40,
+      "wall_s": 0.8329,
+      "ops_per_s": 48.0,
+      "cpu_ms_per_op": 20.31,
+      "cores_busy": 0.98
+    },
+    {
+      "op": "openai_client",
+      "threads": 8,
+      "ops": 96,
+      "wall_s": 1.4636,
+      "ops_per_s": 65.6,
+      "cpu_ms_per_op": 116.65,
+      "cores_busy": 7.65
+    },
+    {
+      "op": "openai_client",
+      "threads": 32,
+      "ops": 384,
+      "wall_s": 9.4964,
+      "ops_per_s": 40.4,
+      "cpu_ms_per_op": 755.36,
+      "cores_busy": 30.54
+    },
+    {
+      "op": "httpx_client",
+      "threads": 1,
+      "ops": 40,
+      "wall_s": 0.819,
+      "ops_per_s": 48.8,
+      "cpu_ms_per_op": 19.93,
+      "cores_busy": 0.97
+    },
+    {
+      "op": "httpx_client",
+      "threads": 8,
+      "ops": 96,
+      "wall_s": 1.4311,
+      "ops_per_s": 67.1,
+      "cpu_ms_per_op": 114.18,
+      "cores_busy": 7.66
+    },
+    {
+      "op": "httpx_client",
+      "threads": 32,
+      "ops": 384,
+      "wall_s": 9.7029,
+      "ops_per_s": 39.6,
+      "cpu_ms_per_op": 767.52,
+      "cores_busy": 30.38
+    },
+    {
+      "op": "ssl_context_certifi",
+      "threads": 1,
+      "ops": 40,
+      "wall_s": 0.8156,
+      "ops_per_s": 49.0,
+      "cpu_ms_per_op": 19.84,
+      "cores_busy": 0.97
+    },
+    {
+      "op": "ssl_context_certifi",
+      "threads": 8,
+      "ops": 96,
+      "wall_s": 1.3477,
+      "ops_per_s": 71.2,
+      "cpu_ms_per_op": 107.51,
+      "cores_busy": 7.66
+    },
+    {
+      "op": "ssl_context_certifi",
+      "threads": 32,
+      "ops": 384,
+      "wall_s": 9.6772,
+      "ops_per_s": 39.7,
+      "cpu_ms_per_op": 766.34,
+      "cores_busy": 30.41
+    },
+    {
+      "op": "schema_and_messages",
+      "threads": 1,
+      "ops": 40,
+      "wall_s": 0.0787,
+      "ops_per_s": 508.2,
+      "cpu_ms_per_op": 1.9,
+      "cores_busy": 0.97
+    },
+    {
+      "op": "schema_and_messages",
+      "threads": 8,
+      "ops": 96,
+      "wall_s": 0.1972,
+      "ops_per_s": 486.9,
+      "cpu_ms_per_op": 1.91,
+      "cores_busy": 0.93
+    },
+    {
+      "op": "schema_and_messages",
+      "threads": 32,
+      "ops": 384,
+      "wall_s": 0.8788,
+      "ops_per_s": 437.0,
+      "cpu_ms_per_op": 2.35,
+      "cores_busy": 1.03
+    }
+  ]
+}
