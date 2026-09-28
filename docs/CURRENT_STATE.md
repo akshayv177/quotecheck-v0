@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-01 (QC-5R)
+Last updated: 2026-09-28 (QC-HOTFIX-demo-question-bound)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -228,7 +228,10 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   bundled charge gets both chunks) so the two bottom report sections are
   domain-specific and non-duplicate content rather than fixed boilerplate; only the
   true no-match fallback (nothing domain-specific detected) uses plain clarifying
-  questions. This is still keyword matching, not a real line-item parser/extractor
+  questions. When three or more blocks match, `verification_questions` is trimmed
+  to the schema's 8-question cap with a per-block round-robin quota (every matched
+  block keeps its leading questions, block order preserved); `things_to_verify` is
+  not trimmed. This is still keyword matching, not a real line-item parser/extractor
   or NLP.
 - OpenAI mode is implemented (strict structured outputs + Pydantic validation).
 - Frontend renders the full result as a quote-understanding report (explanation
@@ -306,6 +309,25 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Fixed in QC-HOTFIX-demo-question-bound
+
+- Bug: a quote matching three or more Demo keyword blocks (each adds 3
+  vendor questions) produced 9–12 `verification_questions`, exceeding the schema's
+  `max_length=8`; the Demo analyzer raised a Pydantic `ValidationError` and
+  `POST /analyze` returned HTTP 500 `internal_error`. Reproduction: "Brake pad
+  replacement. AC gas top-up. …" (vehicle + AC + generic-charge via `gas top-up`).
+  Predated SCALE-001; TASK-008A's "up to 6" note only considered two blocks.
+- `backend/core/stub_analyzer.py`: new `_fit_question_blocks()` flattens the
+  per-block question lists, unchanged when ≤ 8; otherwise a round-robin quota
+  keeps every matched block represented (3 blocks → 3/3/2, 4 blocks → 2/2/2/2).
+- `backend/core/schema.py`: the existing bound is now named
+  `MAX_VERIFICATION_QUESTIONS = 8` (same value; the schema contract is unchanged)
+  so the analyzer trims to the single source.
+- `eval/tests/test_stub_analyzer.py`: `MixedDomainQuestionBoundTests` (4 tests).
+  3 fail on `main`, and all 4 pass after the fix. The suite has 148 tests. Demo eval is unchanged
+  (27/27 schema-valid, 24/27 deterministic, residuals `AUTO-004`/`CONT-003`/`HVAC-003`).
+  No OpenAI-mode, prompt, API, frontend, or deployment change.
 
 ### Added in QC-5R
 
