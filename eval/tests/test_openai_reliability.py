@@ -103,8 +103,30 @@ def incomplete_response() -> SimpleNamespace:
 
 
 @contextlib.contextmanager
+def isolated_shared_client():
+    """Run with the analyzer's process-wide client (SCALE-002) starting cold.
+
+    On exit, explicitly close any client built inside the context — a real SDK
+    client owns an httpx connection pool — and only then restore the singleton
+    to its prior value (``None``). Tests never rely on GC to close a client.
+    """
+    from backend.core import openai_analyzer
+
+    with mock.patch.object(openai_analyzer, "_client", None):
+        try:
+            yield openai_analyzer
+        finally:
+            built = openai_analyzer._client
+            if built is not None:
+                built.close()
+
+
+@contextlib.contextmanager
 def patched_openai(create_side_effect, *, api_key="sk-test-key", timeout_raw=None):
-    """Patch the OpenAI client boundary; yield (create_mock, ctor_kwargs)."""
+    """Patch the OpenAI client boundary; yield (create_mock, ctor_kwargs).
+
+    The shared client starts cold, so each context constructs through ``_factory``.
+    """
     ctor_kwargs: dict = {}
     create_mock = mock.MagicMock(side_effect=create_side_effect)
 
@@ -115,7 +137,8 @@ def patched_openai(create_side_effect, *, api_key="sk-test-key", timeout_raw=Non
         client.responses.create = create_mock
         return client
 
-    with mock.patch("backend.core.openai_analyzer.OpenAI", _factory), \
+    with isolated_shared_client(), \
+         mock.patch("backend.core.openai_analyzer.OpenAI", _factory), \
          mock.patch("backend.core.openai_analyzer.OPENAI_API_KEY", api_key), \
          mock.patch("backend.core.openai_analyzer.OPENAI_TIMEOUT_SECONDS_RAW", timeout_raw):
         yield create_mock, ctor_kwargs
@@ -266,6 +289,9 @@ class ConfigurationTests(unittest.TestCase):
                 analyze_quote_openai(quote_text="a quote", request_id="rid-1")
             self.assertEqual(ctx.exception.category, FailureCategory.CONFIGURATION_ERROR)
             self.assertEqual(cm.call_count, 0, "no provider call may be made on a config error")
+            from backend.core import openai_analyzer
+
+            self.assertIsNone(openai_analyzer._client, "no client may be built on a config error")
 
     def test_missing_api_key_none(self):
         self._expect_config_error(api_key=None)
@@ -364,6 +390,109 @@ class RetryOwnershipTests(unittest.TestCase):
 
     def test_max_attempts_constant_is_two(self):
         self.assertEqual(OPENAI_MAX_ATTEMPTS, 2)
+
+
+# --------------------------------------------------------------------------- #
+# SCALE-002: one process-wide SDK client
+# --------------------------------------------------------------------------- #
+
+@contextlib.contextmanager
+def counting_openai(create_side_effect, *, build_delay_s=0.0):
+    """Like ``patched_openai`` but yields (ctor_mock, create_mock) so tests can
+    count constructions. ``build_delay_s`` widens the cold-start race window."""
+    import time as _time
+
+    create_mock = mock.MagicMock(side_effect=create_side_effect)
+
+    def _build(*_args, **_kwargs):
+        if build_delay_s:
+            _time.sleep(build_delay_s)
+        client = mock.MagicMock()
+        client.responses.create = create_mock
+        return client
+
+    ctor_mock = mock.MagicMock(side_effect=_build)
+    with isolated_shared_client(), \
+         mock.patch("backend.core.openai_analyzer.OpenAI", ctor_mock), \
+         mock.patch("backend.core.openai_analyzer.OPENAI_API_KEY", "sk-test-key"), \
+         mock.patch("backend.core.openai_analyzer.OPENAI_TIMEOUT_SECONDS_RAW", None):
+        yield ctor_mock, create_mock
+
+
+class SharedClientLifecycleTests(unittest.TestCase):
+    def test_sequential_analyses_reuse_one_client(self):
+        from backend.core import openai_analyzer
+
+        with counting_openai([valid_response(), valid_response()]) as (ctor, cm):
+            openai_analyzer.analyze_quote_openai(quote_text="a quote", request_id="rid-1")
+            first = openai_analyzer._client
+            openai_analyzer.analyze_quote_openai(quote_text="a quote", request_id="rid-2")
+            self.assertIs(openai_analyzer._client, first)
+        self.assertEqual(ctor.call_count, 1)
+        self.assertEqual(cm.call_count, 2)
+        self.assertEqual(ctor.call_args.kwargs,
+                         {"api_key": "sk-test-key",
+                          "timeout": OPENAI_TIMEOUT_DEFAULT_SECONDS, "max_retries": 0})
+
+    def test_concurrent_cold_start_constructs_exactly_once(self):
+        import threading
+
+        from backend.core import openai_analyzer
+
+        n = 16
+        barrier = threading.Barrier(n)
+        results, errors_seen = [], []
+
+        def worker(i):
+            barrier.wait()
+            try:
+                results.append(openai_analyzer.analyze_quote_openai(
+                    quote_text="a quote", request_id=f"rid-{i}"))
+            except Exception as exc:  # noqa: BLE001 - surfaced by the assertion below
+                errors_seen.append(exc)
+
+        with counting_openai([valid_response() for _ in range(n)],
+                             build_delay_s=0.05) as (ctor, cm):
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=10)
+        self.assertEqual(errors_seen, [])
+        self.assertEqual(len(results), n)
+        self.assertEqual(ctor.call_count, 1, "simultaneous cold requests must share one client")
+        self.assertEqual(cm.call_count, n)
+        self.assertTrue(all(attempts == 1 for _r, _l, attempts in results))
+
+    def test_retry_uses_the_shared_client(self):
+        from backend.core import openai_analyzer
+
+        with counting_openai([openai_exc("timeout"), valid_response()]) as (ctor, cm):
+            _r, _l, attempts = openai_analyzer.analyze_quote_openai(
+                quote_text="a quote", request_id="rid-1")
+        self.assertEqual((ctor.call_count, cm.call_count, attempts), (1, 2, 2))
+
+    def test_cached_client_does_not_bypass_configuration_checks(self):
+        from backend.core import openai_analyzer
+
+        with counting_openai([valid_response(), valid_response()]) as (ctor, cm):
+            openai_analyzer.analyze_quote_openai(quote_text="a quote", request_id="rid-1")
+            for key, timeout_raw in ((None, None), ("sk-test-key", "0")):
+                with mock.patch.object(openai_analyzer, "OPENAI_API_KEY", key), \
+                     mock.patch.object(openai_analyzer, "OPENAI_TIMEOUT_SECONDS_RAW", timeout_raw):
+                    with self.assertRaises(QuoteCheckError) as ctx:
+                        openai_analyzer.analyze_quote_openai(quote_text="q", request_id="rid-2")
+                self.assertEqual(ctx.exception.category, FailureCategory.CONFIGURATION_ERROR)
+        self.assertEqual((ctor.call_count, cm.call_count), (1, 1))
+
+    def test_isolation_closes_the_built_client_then_resets(self):
+        from backend.core import openai_analyzer
+
+        with counting_openai([valid_response()]):
+            openai_analyzer.analyze_quote_openai(quote_text="a quote", request_id="rid-1")
+            built = openai_analyzer._client
+        built.close.assert_called_once_with()
+        self.assertIsNone(openai_analyzer._client)
 
 
 # --------------------------------------------------------------------------- #

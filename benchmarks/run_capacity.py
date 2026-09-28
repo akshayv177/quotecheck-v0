@@ -52,7 +52,9 @@ from urllib.parse import urlsplit
 from benchmarks import stats
 from benchmarks.workloads import WORKLOADS
 
-TICKET = "SCALE-001"
+# The ticket that created this harness. The ticket a given run measures for is
+# recorded separately (--ticket -> env.json "measurement_ticket").
+HARNESS_ORIGIN = "SCALE-001"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_ROOT = REPO_ROOT / "benchmarks" / "results"
 
@@ -150,7 +152,7 @@ def _cpu_model() -> str | None:
     return None
 
 
-def environment_metadata(argv: list[str]) -> dict:
+def environment_metadata(argv: list[str], measurement_ticket: str | None = None) -> dict:
     versions = {}
     for p in PACKAGES:
         try:
@@ -158,7 +160,8 @@ def environment_metadata(argv: list[str]) -> dict:
         except importlib.metadata.PackageNotFoundError:
             versions[p] = None
     return {
-        "ticket": TICKET,
+        "harness_origin": HARNESS_ORIGIN,
+        "measurement_ticket": measurement_ticket,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "git_commit": _git("rev-parse", "HEAD"),
         "git_branch": _git("branch", "--show-current"),
@@ -727,6 +730,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--experiment", choices=("demo", "fake", "retry", "all"), nargs="+",
                     default=["all"])
     ap.add_argument("--run-id", default=None)
+    ap.add_argument("--ticket", default=None,
+                    help="ticket this measurement is for, recorded in env.json (metadata only)")
     ap.add_argument("--trials", type=int, default=None, help="default 3 (1 with --quick)")
     ap.add_argument("--quick", action="store_true", help="tiny smoke run, not evidence")
     args = ap.parse_args(argv)
@@ -742,7 +747,8 @@ def main(argv: list[str] | None = None) -> int:
     trials = args.trials or (1 if args.quick else 3)
     p = plan(args.quick)
 
-    env_meta = environment_metadata(["-m", "benchmarks.run_capacity", *argv])
+    env_meta = environment_metadata(["-m", "benchmarks.run_capacity", *argv],
+                                    measurement_ticket=args.ticket)
     env_meta.update({"run_id": run_id, "quick": args.quick, "experiments": sorted(exps),
                      "trials_per_point": trials,
                      "plan": {k: v for k, v in p.items() if not callable(v)},

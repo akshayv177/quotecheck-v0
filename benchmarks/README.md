@@ -2,7 +2,9 @@
 
 A local, zero-provider-cost harness for measuring how the **unmodified** QuoteCheck
 backend behaves as concurrent requests and simulated provider latency increase.
-The findings are in [`docs/scalability/SCALE-001_BASELINE.md`](../docs/scalability/SCALE-001_BASELINE.md).
+The findings are in [`docs/scalability/SCALE-001_BASELINE.md`](../docs/scalability/SCALE-001_BASELINE.md)
+(baseline) and [`docs/scalability/SCALE-002_SHARED_CLIENT.md`](../docs/scalability/SCALE-002_SHARED_CLIENT.md)
+(shared OpenAI client, before/after).
 
 Local results are comparative evidence about this code on one machine. They are
 not production SLAs and say nothing about real OpenAI capacity.
@@ -33,6 +35,10 @@ python -m benchmarks.run_capacity --quick
 
 # full SCALE-001 baseline (about 5–10 minutes)
 python -m benchmarks.run_capacity --experiment all --run-id SCALE-001-baseline
+
+# SCALE-002 before/after (--ticket only labels env.json "measurement_ticket")
+python -m benchmarks.run_capacity --experiment fake retry --run-id SCALE-002-before --ticket SCALE-002
+python -m benchmarks.run_capacity --experiment all --run-id SCALE-002-after --ticket SCALE-002
 
 # a subset
 python -m benchmarks.run_capacity --experiment demo --run-id my-demo-run
@@ -94,3 +100,12 @@ secrets are not stored in results.
   - Escalation: any failure, or pooled p95 above 30 s at the previous point.
   - A trial whose wall-clock and monotonic elapsed times differ by more than
     1 s is flagged `suspend_suspected` (host sleep) and must be discarded.
+- **Known fake-provider artifact (SCALE-002):** `fake_provider.py` writes the
+  response headers and body in separate sends, and it doesn't set `TCP_NODELAY`.
+  On a *reused* keep-alive connection, Nagle's algorithm and the client's delayed
+  ACK add about 40 ms per request. Per-request clients (SCALE-001) never reused a
+  connection across requests, so they didn't see it. The shared client (SCALE-002)
+  does. The artifact is recorded and deliberately left unchanged, so both SCALE-002
+  runs use identical harness code. Fix it before the next comparison.
+- `env.json` records `harness_origin` (the ticket that created this harness) and
+  `measurement_ticket` (from `--ticket`; `null` if omitted).

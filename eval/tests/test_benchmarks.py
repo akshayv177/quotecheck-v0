@@ -21,6 +21,7 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
+from backend.core.config import OPENAI_TIMEOUT_DEFAULT_SECONDS
 from backend.core.schema import MAX_QUOTE_TEXT_CHARS, QuoteCheckResult
 from benchmarks import stats
 from benchmarks.fake_provider import FakeProviderServer, FakeProviderState
@@ -32,7 +33,7 @@ from benchmarks.run_capacity import (
     run_load,
 )
 from benchmarks.workloads import WORKLOADS
-from eval.tests.test_openai_reliability import last_log_record, openai_mode_app
+from eval.tests.test_openai_reliability import isolated_shared_client, openai_mode_app
 
 
 @contextlib.contextmanager
@@ -205,17 +206,50 @@ class FakeProviderSdkTests(unittest.TestCase):
 class AnalyzePathAgainstFakeTests(unittest.TestCase):
     """Real /analyze -> real analyzer -> real SDK -> loopback fake (in-process app)."""
 
-    def _post(self, srv, text):
+    def _post_many(self, srv, texts, *, inspect_client=None):
+        """POST each text in one cold shared-client context (SCALE-002); return
+        ([responses], [log records]). The real SDK client built here is closed
+        explicitly on exit by ``isolated_shared_client``."""
         base = f"http://127.0.0.1:{srv.server_address[1]}/v1"
         with tempfile.TemporaryDirectory() as td:
             logp = str(Path(td) / "runs.jsonl")
-            with mock.patch.dict(os.environ, {"OPENAI_BASE_URL": base}), \
+            with isolated_shared_client() as analyzer, \
+                 mock.patch.dict(os.environ, {"OPENAI_BASE_URL": base}), \
                  openai_mode_app(log_path=logp), \
                  mock.patch("backend.core.openai_analyzer.OPENAI_API_KEY", SENTINEL_API_KEY):
                 import backend.app as appmod
 
-                r = TestClient(appmod.app).post("/analyze", json={"quote_text": text})
-            return r, last_log_record(logp)
+                client = TestClient(appmod.app)
+                rs = [client.post("/analyze", json={"quote_text": t}) for t in texts]
+                if inspect_client is not None:
+                    inspect_client(analyzer._client)
+            recs = [json.loads(line) for line in Path(logp).read_text().splitlines()]
+            return rs, recs
+
+    def _post(self, srv, text):
+        rs, recs = self._post_many(srv, [text])
+        return rs[0], recs[-1]
+
+    def test_shared_client_reuses_one_connection_across_requests(self):
+        seen = {}
+
+        def inspect(client):
+            seen["client"] = client
+            seen["max_retries"] = client.max_retries
+            seen["timeout"] = client.timeout
+
+        with fake_server(latency_s=0) as srv:
+            rs, recs = self._post_many(srv, [WORKLOADS["normal"].text] * 3,
+                                       inspect_client=inspect)
+            snap = srv.state.snapshot()
+        self.assertEqual([r.status_code for r in rs], [200, 200, 200])
+        self.assertEqual([rec["provider_attempts"] for rec in recs], [1, 1, 1])
+        self.assertEqual(snap["attempts_started"], 3)
+        # One process-wide client -> one pooled keep-alive connection, not one per request.
+        self.assertEqual(snap["connections_accepted"], 1)
+        self.assertEqual(seen["max_retries"], 0)
+        self.assertEqual(seen["timeout"], OPENAI_TIMEOUT_DEFAULT_SECONDS)
+        self.assertTrue(seen["client"].is_closed(), "test cleanup must close the real client")
 
     def test_success_one_attempt(self):
         with fake_server(latency_s=0) as srv:
