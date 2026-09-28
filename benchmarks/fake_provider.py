@@ -1,4 +1,5 @@
-"""Deterministic loopback fake of the OpenAI Responses endpoint (SCALE-001).
+"""Deterministic loopback fake of the OpenAI Responses endpoint (SCALE-001;
+TCP_NODELAY and per-attempt timestamps added in SCALE-003).
 
 QuoteCheck is run *unmodified* in OpenAI mode with ``OPENAI_BASE_URL`` pointed
 at this server, so only the remote provider is replaced: the uvicorn/h11 HTTP
@@ -10,7 +11,9 @@ Endpoints
 ---------
 POST /v1/responses   the fake provider call (sleeps ``latency_s``, then answers)
 GET  /__stats        counters as JSON
-POST /__reset        zero counters; optional JSON body {"latency_s", "mode"}
+GET  /__attempts     per-attempt log as JSON (see below)
+POST /__reset        zero counters and the attempt log; optional JSON body
+                     {"latency_s", "mode"}
 
 Modes
 -----
@@ -23,6 +26,21 @@ fail_always every attempt returns HTTP 503.
 Counters (started, completed, in-flight, peak in-flight, injected failures,
 TCP connections accepted) are guarded by one ``threading.Lock``.
 
+Attempt log (SCALE-003): every ``/v1/responses`` attempt appends
+``{"seq", "marker", "t_start", "t_end", "status"}``. ``t_start`` is taken when the
+request body has been read, ``t_end`` after the response has been written. Both
+are ``time.monotonic()``, which on Linux is the system-wide ``CLOCK_MONOTONIC``
+also behind the harness's ``time.perf_counter()``, so the harness can place each
+attempt exactly on its own request timeline. This lives only in the fake; it
+adds no instrumentation to QuoteCheck.
+
+TCP_NODELAY (SCALE-003): ``http.server`` writes response headers and body in two
+``send`` calls. On a *reused* keep-alive connection, Nagle's algorithm then
+holds the body until the client's delayed ACK (~40 ms on Linux). Real
+QuoteCheck reuses connections since SCALE-002, so the fake sets TCP_NODELAY on
+every accepted socket. ``tcp_nodelay=False`` reproduces the SCALE-001/002
+instrument, for the before/after diagnostic only (``benchmarks.diag_keepalive``).
+
 Run standalone: ``python -m benchmarks.fake_provider --port 0`` prints
 ``READY <port>`` on stdout once listening. Binds 127.0.0.1 only.
 """
@@ -32,6 +50,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import socket
 import sys
 import threading
 import time
@@ -109,23 +128,31 @@ class FakeProviderState:
             self.injected_failures = 0
             self.connections_accepted = 0
             self._seen_markers: set[str] = set()
+            self._attempts: list[dict] = []
 
     def note_connection(self) -> None:
         with self._lock:
             self.connections_accepted += 1
 
-    def begin(self) -> int:
+    def begin(self, marker: str | None = None) -> int:
+        t = time.monotonic()
         with self._lock:
             self.started += 1
             self.in_flight += 1
             if self.in_flight > self.peak_in_flight:
                 self.peak_in_flight = self.in_flight
+            self._attempts.append({"seq": self.started, "marker": marker, "t_start": t,
+                                   "t_end": None, "status": None})
             return self.started
 
-    def end(self) -> None:
+    def end(self, seq: int | None = None, status: int | None = None) -> None:
+        t = time.monotonic()
         with self._lock:
             self.in_flight -= 1
             self.completed += 1
+            if seq is not None:
+                rec = self._attempts[seq - 1]
+                rec["t_end"], rec["status"] = t, status
 
     def should_fail(self, marker: str | None) -> bool:
         """Decide (atomically) whether this attempt gets an injected 503."""
@@ -155,6 +182,10 @@ class FakeProviderState:
                 "connections_accepted": self.connections_accepted,
             }
 
+    def attempts(self) -> list[dict]:
+        with self._lock:
+            return [dict(a) for a in self._attempts]
+
 
 class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -178,6 +209,8 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/__stats":
             self._send_json(200, self.server.state.snapshot())
+        elif self.path == "/__attempts":
+            self._send_json(200, {"attempts": self.server.state.attempts()})
         else:
             self._send_json(404, {"error": {"message": "not found"}})
 
@@ -198,13 +231,16 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": {"message": "not found"}})
             return
 
-        seq = state.begin()
+        text = body.decode("utf-8", errors="replace")
+        m = MARKER_RE.search(text)
+        marker = m.group(1) if m else None
+        seq = state.begin(marker)
+        status = None
         try:
-            text = body.decode("utf-8", errors="replace")
-            m = MARKER_RE.search(text)
-            fail = state.should_fail(m.group(1) if m else None)
+            fail = state.should_fail(marker)
             time.sleep(state.latency_s)
             if fail:
+                status = 503
                 self._send_json(503, {"error": {"message": "bench injected transient failure",
                                                 "type": "server_error"}})
             else:
@@ -212,9 +248,10 @@ class _Handler(BaseHTTPRequestHandler):
                     model = json.loads(body).get("model", "bench")
                 except ValueError:
                     model = "bench"
+                status = 200
                 self._send_json(200, responses_body(self.server.output_text, seq=seq, model=model))
         finally:
-            state.end()
+            state.end(seq, status)
 
 
 class FakeProviderServer(ThreadingHTTPServer):
@@ -222,13 +259,16 @@ class FakeProviderServer(ThreadingHTTPServer):
     request_queue_size = 1024  # stdlib default 5 would itself throttle bursts
 
     def __init__(self, port: int = 0, *, latency_s: float = 0.25, mode: str = "success",
-                 output_text: str | None = None):
+                 output_text: str | None = None, tcp_nodelay: bool = True):
+        self.tcp_nodelay = tcp_nodelay
         super().__init__(("127.0.0.1", port), _Handler)
         self.state = FakeProviderState(latency_s=latency_s, mode=mode)
         self.output_text = output_text if output_text is not None else build_model_output_json()
 
     def get_request(self):
         conn = super().get_request()
+        if self.tcp_nodelay:
+            conn[0].setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.state.note_connection()
         return conn
 

@@ -1,0 +1,111 @@
+excluded suspend trials: [('retry_sat_fail_first_3000ms', 64, 3), ('sat_lat3s', 32, 1), ('sat_lat3s', 40, 3)]
+
+| scenario | C | trials | ok/fail | rps mean | e2e p50 | e2e p95 | e2e max | loop p50 | loop p95 | pre p50 | pre p95 | post p50 | post p95 | gap p50 | att/req | peak in-flight | mean in-flight | time ≥40 | CPU ms/req | peak thr | RSS MB | fds | new conns |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| retry_sat_fail_always_3000ms | 64 | 3 | 0/384 | 0.0 | 11773 | 12374 | 18230 | 6041 | 6183 | 182 | 6233 | 68 | 5868 | 5 | 2.00 | 40 | 31.8 | 0.72 | 7.3 | 41 | 96 | 113 | 32 |
+   status counts {'503': 384}
+| retry_sat_fail_first_3000ms | 32 | 3 | 384/0 | 5.23 | 6070 | 6225 | 6285 | 6057 | 6171 | 33 | 121 | 8 | 76 | 6 | 2.00 | 32 | 31.4 | 0.00 | 7.0 | 33 | 86 | 72 | 1 |
+| retry_sat_fail_first_3000ms | 40 | 3 | 480/0 | 6.51 | 6082 | 6286 | 6348 | 6070 | 6230 | 43 | 155 | 6 | 111 | 4 | 2.00 | 40 | 39.1 | 0.94 | 7.2 | 41 | 91 | 88 | 1 |
+| retry_sat_fail_first_3000ms | 64 | 2 | 512/0 | 6.04 | 11710 | 12345 | 18256 | 6022 | 6179 | 171 | 6282 | 129 | 5866 | 2 | 2.00 | 40 | 36.3 | 0.82 | 6.9 | 41 | 94 | 113 | 29 |
+| sat_lat1s | 1 | 3 | 48/0 | 0.98 | 1017 | 1026 | 1028 | 1013 | 1022 | 3 | 4 | 2 | 3 | – | 1.00 | 1 | 1.0 | 0.00 | 6.3 | 2 | 75 | 9 | 1 |
+| sat_lat1s | 16 | 3 | 192/0 | 15.19 | 1040 | 1098 | 1110 | 1025 | 1074 | 22 | 47 | 9 | 49 | – | 1.00 | 16 | 15.2 | 0.00 | 5.0 | 17 | 78 | 40 | 1 |
+| sat_lat1s | 32 | 3 | 384/0 | 28.6 | 1096 | 1199 | 1251 | 1075 | 1166 | 66 | 106 | 28 | 103 | – | 1.00 | 32 | 28.7 | 0.00 | 5.3 | 33 | 84 | 72 | 1 |
+| sat_lat1s | 40 | 3 | 480/0 | 34.46 | 1132 | 1262 | 1342 | 1108 | 1214 | 90 | 142 | 40 | 138 | – | 1.00 | 40 | 34.5 | 0.72 | 5.6 | 41 | 88 | 88 | 1 |
+| sat_lat1s | 48 | 3 | 576/0 | 33.83 | 1171 | 2183 | 3048 | 1086 | 1200 | 107 | 917 | 63 | 720 | – | 1.00 | 40 | 33.9 | 0.67 | 5.3 | 41 | 89 | 96 | 1 |
+| sat_lat1s | 64 | 3 | 768/0 | 33.66 | 1615 | 2366 | 3441 | 1070 | 1187 | 167 | 1275 | 101 | 1089 | – | 1.00 | 40 | 33.7 | 0.72 | 5.2 | 41 | 91 | 113 | 1 |
+| sat_lat3s | 16 | 3 | 192/0 | 5.25 | 3036 | 3094 | 3107 | 3021 | 3060 | 19 | 45 | 9 | 39 | – | 1.00 | 16 | 15.8 | 0.00 | 4.9 | 17 | 78 | 39 | 1 |
+| sat_lat3s | 32 | 2 | 256/0 | 10.2 | 3119 | 3218 | 3272 | 3097 | 3185 | 84 | 129 | 37 | 120 | – | 1.00 | 32 | 30.6 | 0.00 | 6.0 | 33 | 84 | 72 | 1 |
+| sat_lat3s | 40 | 2 | 320/0 | 12.61 | 3127 | 3284 | 3341 | 3106 | 3242 | 88 | 141 | 44 | 150 | – | 1.00 | 40 | 37.9 | 0.89 | 6.1 | 41 | 88 | 88 | 1 |
+| sat_lat3s | 48 | 3 | 576/0 | 12.27 | 3161 | 6150 | 6398 | 3074 | 3212 | 104 | 2861 | 61 | 2715 | – | 1.00 | 40 | 36.8 | 0.75 | 5.7 | 42 | 90 | 97 | 1 |
+| sat_lat3s | 64 | 3 | 768/0 | 11.9 | 5618 | 6366 | 9410 | 3063 | 3172 | 195 | 3286 | 109 | 3023 | – | 1.00 | 40 | 35.7 | 0.81 | 5.3 | 41 | 92 | 113 | 1 |
+| sat_lat5s | 16 | 3 | 192/0 | 3.17 | 5038 | 5111 | 5128 | 5023 | 5078 | 19 | 51 | 10 | 46 | – | 1.00 | 16 | 15.8 | 0.00 | 5.6 | 17 | 78 | 41 | 1 |
+| sat_lat5s | 32 | 3 | 384/0 | 6.23 | 5101 | 5230 | 5272 | 5078 | 5189 | 69 | 117 | 25 | 114 | – | 1.00 | 32 | 31.2 | 0.00 | 6.3 | 33 | 82 | 72 | 1 |
+| sat_lat5s | 40 | 3 | 480/0 | 7.75 | 5124 | 5286 | 5328 | 5099 | 5234 | 81 | 153 | 30 | 148 | – | 1.00 | 40 | 38.8 | 0.94 | 6.0 | 41 | 87 | 88 | 1 |
+| sat_lat5s | 48 | 3 | 576/0 | 7.47 | 5177 | 10172 | 15124 | 5096 | 5229 | 110 | 4940 | 66 | 4739 | – | 1.00 | 40 | 37.4 | 0.77 | 5.8 | 43 | 90 | 97 | 25 |
+| sat_lat5s | 64 | 3 | 768/0 | 7.24 | 9731 | 10336 | 15303 | 5025 | 5165 | 147 | 5250 | 101 | 4939 | – | 1.00 | 40 | 36.2 | 0.83 | 5.0 | 41 | 91 | 113 | 13 |
+
+per-trial throughput:
+retry_sat_fail_always_3000ms 64 [0.0, 0.0, 0.0]
+retry_sat_fail_first_3000ms 32 [5.23, 5.22, 5.25]
+retry_sat_fail_first_3000ms 40 [6.53, 6.51, 6.49]
+retry_sat_fail_first_3000ms 64 [6.04, 6.04]
+sat_lat1s 1 [0.98, 0.98, 0.98]
+sat_lat1s 16 [15.23, 15.25, 15.1]
+sat_lat1s 32 [28.52, 28.78, 28.5]
+sat_lat1s 40 [34.52, 34.14, 34.72]
+sat_lat1s 48 [33.66, 34.09, 33.74]
+sat_lat1s 64 [33.73, 33.49, 33.75]
+sat_lat3s 16 [5.25, 5.24, 5.25]
+sat_lat3s 32 [10.16, 10.23]
+sat_lat3s 40 [12.61, 12.62]
+sat_lat3s 48 [12.21, 12.26, 12.33]
+sat_lat3s 64 [11.91, 11.89, 11.89]
+sat_lat5s 16 [3.16, 3.17, 3.17]
+sat_lat5s 32 [6.23, 6.23, 6.24]
+sat_lat5s 40 [7.72, 7.76, 7.77]
+sat_lat5s 48 [7.5, 7.44, 7.46]
+sat_lat5s 64 [7.24, 7.24, 7.24]
+
+| scenario | C | probes | status | p50 | p95 | max | min | timeouts | at-40 n | at-40 p50 | at-40 p95 | at-40 max | in-flight@send dist | outstanding@send min | load fail | peak thr | peak in-flight |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| health_lat3s | 0 | 40 | {'200': 40} | 2 | 3 | 3 | 1 | 0 | 0 | – | – | – | {'0': 40} | 0 | – | 2 | – |
+| health_lat3s | 32 | 40 | {'200': 40} | 2 | 3 | 7 | 1 | 0 | 0 | – | – | – | {'8': 1, '31': 2, '32': 37} | 32 | 0 | 34 | 32 |
+| health_lat3s | 40 | 40 | {'200': 40} | 31 | 2426 | 2609 | 1 | 0 | 24 | 2007 | 2468 | 2609 | {'18': 1, '29': 1, '38': 5, '39': 9, '40': 24} | 40 | 0 | 41 | 40 |
+| health_lat3s | 64 | 40 | {'200': 40} | 455 | 2768 | 2866 | 63 | 0 | 17 | 2401 | 2866 | 2866 | {'6': 1, '12': 1, '36': 1, '37': 1, '38': 2, '39': 17, '40': 17} | 64 | 0 | 41 | 40 |
+| health_lat5s | 0 | 40 | {'200': 40} | 2 | 3 | 3 | 1 | 0 | 0 | – | – | – | {'0': 40} | 0 | – | 2 | – |
+| health_lat5s | 32 | 40 | {'200': 40} | 2 | 3 | 11 | 1 | 0 | 0 | – | – | – | {'22': 1, '26': 1, '32': 38} | 32 | 0 | 34 | 32 |
+| health_lat5s | 40 | 40 | {'200': 40} | 43 | 4379 | 4549 | 1 | 0 | 24 | 3853 | 4491 | 4549 | {'2': 1, '21': 1, '38': 3, '39': 11, '40': 24} | 40 | 0 | 41 | 40 |
+| health_lat5s | 64 | 40 | {'200': 40} | 295 | 4696 | 4885 | 44 | 0 | 18 | 4483 | 4885 | 4885 | {'1': 1, '6': 1, '35': 1, '38': 1, '39': 18, '40': 18} | 64 | 0 | 41 | 40 |
+health_lat3s [{"concurrency": 0, "probes": 40, "threads_peak": 2}, {"concurrency": 32, "gate_target_in_flight": 32, "gate": "reached", "probes": 40, "load_requests": 224, "load_failures": 0, "load_wall_s": 21.399, "server_cpu_s": 1.09, "threads_peak": 34, "rss_kb_peak": 84200, "fds_peak": 72, "provider_attempts": 224, "provider_peak_in_flight": 32, "guard": null}, {"concurrency": 40, "gate_target_in_flight": 40, "gate": "reached", "probes": 40, "load_requests": 600, "load_failures": 0, "load_wall_s": 45.876, "server_cpu_s": 2.8, "threads_peak": 41, "rss_kb_peak": 88808, "fds_peak": 88, "provider_attempts": 600, "provider_peak_in_flight": 40, "guard": null}, {"concurrency": 64, "gate_target_in_flight": 40, "gate": "reached", "probes": 40, "load_requests": 784, "load_failures": 0, "load_wall_s": 60.863, "server_cpu_s": 3.78, "threads_peak": 41, "rss_kb_peak": 90856, "fds_peak": 114, "provider_attempts": 784, "provider_peak_in_flight": 40, "guard": null}]
+health_lat5s [{"concurrency": 0, "probes": 40, "threads_peak": 2}, {"concurrency": 32, "gate_target_in_flight": 32, "gate": "reached", "probes": 40, "load_requests": 160, "load_failures": 0, "load_wall_s": 25.266, "server_cpu_s": 0.87, "threads_peak": 34, "rss_kb_peak": 83340, "fds_peak": 73, "provider_attempts": 160, "provider_peak_in_flight": 32, "guard": null}, {"concurrency": 40, "gate_target_in_flight": 40, "gate": "reached", "probes": 40, "load_requests": 587, "load_failures": 0, "load_wall_s": 75.916, "server_cpu_s": 2.9, "threads_peak": 41, "rss_kb_peak": 88204, "fds_peak": 89, "provider_attempts": 587, "provider_peak_in_flight": 40, "guard": null}, {"concurrency": 64, "gate_target_in_flight": 40, "gate": "reached", "probes": 40, "load_requests": 817, "load_failures": 0, "load_wall_s": 105.717, "server_cpu_s": 4.0, "threads_peak": 41, "rss_kb_peak": 90252, "fds_peak": 113, "provider_attempts": 817, "provider_peak_in_flight": 40, "guard": null}]
+
+health-load analysis requests:
+('health_lat3s', 32) n 224 fail 0 e2e 3019.64 3126.07 pre 6.3 89.15 post 3.04 44.45 78.44
+('health_lat3s', 40) n 600 fail 0 e2e 3007.59 3188.96 pre 3.29 143.77 post 2.04 66.72 171.62
+('health_lat3s', 64) n 784 fail 0 e2e 5472.93 6245.85 pre 322.98 2886.73 post 291.89 2634.42 3222.63
+('health_lat5s', 32) n 160 fail 0 e2e 5020.54 5136.07 pre 7.46 89.98 post 4.3 24.6 57.01
+('health_lat5s', 40) n 587 fail 0 e2e 5011.14 5208.09 pre 5.2 113.46 post 3.31 78.42 194.97
+('health_lat5s', 64) n 817 fail 0 e2e 9679.22 10235.76 pre 217.59 4982.79 post 195.84 4779.01 5210.56
+
+scenario C | non-provider mean ms | frac pre>L/2 | frac post>L/2 | both | neither
+('retry_sat_fail_always_3000ms', 64) 3363 0.391 0.151 0.016 0.474
+('retry_sat_fail_first_3000ms', 32) 66 0.0 0.0 0.0 1.0
+('retry_sat_fail_first_3000ms', 40) 88 0.0 0.0 0.0 1.0
+('retry_sat_fail_first_3000ms', 64) 3460 0.344 0.219 0.014 0.451
+('sat_lat1s', 1) 5 0.0 0.0 0.0 1.0
+('sat_lat1s', 16) 40 0.0 0.0 0.0 1.0
+('sat_lat1s', 32) 97 0.0 0.0 0.0 1.0
+('sat_lat1s', 40) 133 0.0 0.0 0.0 1.0
+('sat_lat1s', 48) 303 0.115 0.05 0.002 0.837
+('sat_lat1s', 64) 700 0.341 0.199 0.03 0.49
+('sat_lat3s', 16) 36 0.0 0.0 0.0 1.0
+('sat_lat3s', 32) 119 0.0 0.0 0.0 1.0
+('sat_lat3s', 40) 135 0.0 0.0 0.0 1.0
+('sat_lat3s', 48) 625 0.108 0.059 0.0 0.833
+('sat_lat3s', 64) 1813 0.359 0.203 0.022 0.46
+('sat_lat5s', 16) 40 0.0 0.0 0.0 1.0
+('sat_lat5s', 32) 103 0.0 0.0 0.0 1.0
+('sat_lat5s', 40) 126 0.0 0.0 0.0 1.0
+('sat_lat5s', 48) 975 0.102 0.064 0.002 0.835
+('sat_lat5s', 64) 2901 0.358 0.204 0.007 0.444
+connections_accepted sat_lat5s 48 1 25 
+connections_accepted sat_lat5s 48 2 9 
+connections_accepted sat_lat5s 48 3 9 
+connections_accepted sat_lat5s 64 1 7 
+connections_accepted sat_lat5s 64 2 13 
+connections_accepted sat_lat5s 64 3 10 
+connections_accepted retry_sat_fail_first_3000ms 64 1 29 
+connections_accepted retry_sat_fail_first_3000ms 64 2 24 
+connections_accepted retry_sat_fail_first_3000ms 64 3 22 (suspend-flagged)
+connections_accepted retry_sat_fail_always_3000ms 64 1 31 
+fail_always trial 1 503/s 5.27
+connections_accepted retry_sat_fail_always_3000ms 64 2 32 
+fail_always trial 2 503/s 5.31
+connections_accepted retry_sat_fail_always_3000ms 64 3 32 
+fail_always trial 3 503/s 5.3
+
+at-40 probes: probe latency minus time from send to the next provider completion (ms)
+('health_lat3s', 40) n 24 min 1 median 2 max 3
+('health_lat3s', 64) n 17 min 119 median 504 max 617
+('health_lat5s', 40) n 24 min 1 median 3 max 18
+('health_lat5s', 64) n 18 min 106 median 352 max 4549
