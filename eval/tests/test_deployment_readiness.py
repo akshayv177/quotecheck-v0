@@ -51,6 +51,8 @@ def demo_mode_app(*, openai_key=None):
         es.enter_context(mock.patch("backend.core.openai_analyzer.OPENAI_API_KEY", openai_key))
         openai_ctor = mock.MagicMock(name="OpenAI")
         es.enter_context(mock.patch("backend.core.openai_analyzer.OpenAI", openai_ctor))
+        # SCALE-002: the process-wide client starts cold and must stay unbuilt.
+        es.enter_context(mock.patch("backend.core.openai_analyzer._client", None))
         yield appmod, openai_ctor
 
 
@@ -285,6 +287,9 @@ class PublicDemoConfigTests(unittest.TestCase):
     def test_openai_client_is_never_constructed_in_demo_mode(self):
         self.client.post("/analyze", json={"quote_text": "Coolant flush and top-up."})
         self.openai_ctor.assert_not_called()
+        from backend.core import openai_analyzer
+
+        self.assertIsNone(openai_analyzer._client, "Demo mode must never build the shared client")
 
 
 # --------------------------------------------------------------------------- #

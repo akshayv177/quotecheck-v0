@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-28 (QC-HOTFIX-demo-question-bound)
+Last updated: 2026-09-28 (SCALE-002)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -38,7 +38,11 @@ JSONL log record per request.
   `schema_export.py`), then mandatory final Pydantic validation of the response;
   server overrides metadata. Default model `gpt-4o-mini` (`QUOTECHECK_MODEL`).
   QC-4: the SDK client is built with an explicit bounded `timeout`
-  (`QUOTECHECK_OPENAI_TIMEOUT_SECONDS`, default 30s) and `max_retries=0`; a small
+  (`QUOTECHECK_OPENAI_TIMEOUT_SECONDS`, default 30s) and `max_retries=0`. SCALE-002:
+  that client is one process-wide instance (`_get_client()`), built lazily and
+  lock-guarded on the first OpenAI-mode request that passes config validation —
+  never in Demo mode — and reused (with its httpx keep-alive pool) for every later
+  request; it is not explicitly closed. A small
   no-backoff loop here retries **once**, only for transient connection / timeout /
   provider-5xx failures (max 2 provider calls per request). Response state is
   inspected explicitly — refusal, incomplete/failed, empty structured content, and
@@ -309,6 +313,53 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Changed in SCALE-002
+
+One process-wide OpenAI SDK client replaces per-request `OpenAI(...)` construction
+(`backend/core/openai_analyzer.py`). **Client lifetime only.** The following are
+unchanged:
+
+- timeout and `max_retries=0`
+- the one application retry and 2-attempt bound, with no retry on 429
+- the failure taxonomy and `provider_attempts`
+- mandatory validation and no Demo fallback
+- API, logging, prompt and schema
+- `app.py` and `config.py`
+- dependencies and deployment
+
+No billed call was made, and the public deployment was not load-tested.
+
+- **Lifecycle:**
+  - The client is built lazily, and only after the API-key and timeout checks
+    pass. A config error still raises `configuration_error` with no client
+    built, and Demo mode never builds one.
+  - A double-checked lock builds exactly one client under a concurrent cold
+    start.
+  - There is no shutdown hook.
+  - Config values are fixed at first use. They were already import-time
+    constants, so there is no production difference.
+- **Tests:** the suite now has 172 tests (was 166 after the hotfix merge):
+  - `SharedClientLifecycleTests` covers reuse, concurrent cold start, retry on
+    the shared client, config checks before the cached client, and isolation.
+  - A real-SDK loopback test shows 3 requests reusing 1 TCP connection.
+  - The Demo test asserts that no client is built.
+  - Tests reset the singleton with `mock.patch`, after explicitly closing any
+    client they built.
+- **Benchmark metadata:** `run_capacity.py` records `harness_origin` (SCALE-001)
+  and `measurement_ticket` (new `--ticket` flag) instead of a fixed `ticket`.
+  No measurement logic changed.
+- **Recharacterization:** `docs/scalability/SCALE-002_SHARED_CLIENT.md`, with raw
+  evidence in `benchmarks/results/SCALE-002-{before,after}/`. Local, fake
+  provider, comparative only.
+  - At 250 ms / C=64: 46.6 → 102.1 rps, p95 2147 → 863 ms, server CPU per
+    request 469 → 5.7 ms, and no new provider connection per request.
+  - The next constraint is the implicit anyio 40-thread limit: peak in-flight is
+    pinned at 40, and QuoteCheck has no explicit provider-concurrency budget or
+    overload policy.
+  - The loopback fake provider adds about 40 ms per request on reused
+    connections (Nagle's algorithm on its socket). This benchmark artifact makes
+    the after-run gains an understatement. It is recorded, not fixed.
 
 ### Fixed in QC-HOTFIX-demo-question-bound
 
