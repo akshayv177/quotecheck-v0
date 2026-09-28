@@ -37,6 +37,10 @@ from pydantic import BaseModel, Field
 # (frontend/src/App.jsx MAX_QUOTE_CHARS) for UX only; this bound is authoritative.
 MAX_QUOTE_TEXT_CHARS = 12_000
 
+# Upper bound on QuoteCheckResult.verification_questions. Named so the Demo
+# analyzer can trim its combined domain questions to the same contract.
+MAX_VERIFICATION_QUESTIONS = 8
+
 
 class NormalizedCategory(str, Enum):
     """
@@ -206,7 +210,7 @@ class QuoteCheckResult(BaseModel):
     verification_questions: List[str] = Field(
         ...,
         min_length=3,
-        max_length=8,
+        max_length=MAX_VERIFICATION_QUESTIONS,
         description="Concrete, vendor-facing questions the user can send back to the vendor before approving.",
     )
     things_to_verify: List[str] = Field(

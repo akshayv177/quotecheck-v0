@@ -46,6 +46,7 @@ from datetime import datetime, timezone
 from backend.core.config import DEMO_ANALYZER_MODEL
 from backend.core.prompt import PROMPT_VERSION
 from backend.core.schema import (
+    MAX_VERIFICATION_QUESTIONS,
     LineItem,
     MetaData,
     NormalizedCategory,
@@ -260,16 +261,19 @@ def _domain_questions_and_verification(
     that also has a generic bundled charge gets both chunks); when nothing
     domain-specific matched, both lists fall back to plain clarifying questions
     rather than pretending to know quote-specific details.
+
+    Each matched block contributes 3 questions, so several blocks together can
+    exceed MAX_VERIFICATION_QUESTIONS; `_fit_question_blocks` trims them.
     """
-    questions: list[str] = []
+    question_blocks: list[list[str]] = []
     verify: list[str] = []
 
     if vehicle_matched:
-        questions += [
+        question_blocks.append([
             "Can you share photos or measurements (pad thickness, tread depth) that support the brake/tyre recommendation?",
             "Is this brake/tyre work needed immediately, or can it wait until after a second opinion?",
             "Are the replacement parts OEM or aftermarket, and what warranty do they carry?",
-        ]
+        ])
         verify += [
             "Confirm current pad thickness and tread depth measurements before approving replacement.",
             "Check whether the vehicle is still under a manufacturer or extended warranty that could cover this work.",
@@ -277,11 +281,11 @@ def _domain_questions_and_verification(
         ]
 
     if ac_matched:
-        questions += [
+        question_blocks.append([
             "What diagnostic fault code or symptom led to the compressor/refrigerant recommendation?",
             "Is the unit still under manufacturer or extended warranty?",
             "What refrigerant type and quantity does the job require, and is that reflected in the price?",
-        ]
+        ])
         verify += [
             "Get the unit's model/serial number and confirm its warranty status before approving.",
             "Confirm a refrigerant leak was actually located, not just assumed from low pressure.",
@@ -289,11 +293,11 @@ def _domain_questions_and_verification(
         ]
 
     if home_matched:
-        questions += [
+        question_blocks.append([
             "Can you provide a written scope of work broken down by task (plumbing, electrical, etc.)?",
             "What is the estimated labor-hours and materials cost for each task?",
             "Are permits required for any of this work, and who is responsible for obtaining them?",
-        ]
+        ])
         verify += [
             "Request an itemized scope-of-work document before work begins.",
             "Confirm whether permits are required for any electrical or plumbing work.",
@@ -301,16 +305,18 @@ def _domain_questions_and_verification(
         ]
 
     if generic_charge_matched:
-        questions += [
+        question_blocks.append([
             "Can you itemize exactly what the misc/service/handling charge covers?",
             "Is this a fixed fee or a time-based labour charge, and what's the hourly rate if applicable?",
             "Does this charge overlap with cost already included in another line item on the quote?",
-        ]
+        ])
         verify += [
             "Request a line-by-line breakdown of any bundled or generically named charges.",
             "Confirm this charge isn't duplicating cost already included in another line item.",
             "Ask whether this charge is negotiable or waivable if you decline related work.",
         ]
+
+    questions = _fit_question_blocks(question_blocks)
 
     if not questions:
         questions = [
@@ -325,6 +331,26 @@ def _domain_questions_and_verification(
         ]
 
     return questions, verify
+
+
+def _fit_question_blocks(blocks: list[list[str]]) -> list[str]:
+    """
+    Flatten per-domain question blocks, in block order, into at most
+    MAX_VERIFICATION_QUESTIONS questions. Unchanged when everything fits.
+    Otherwise each block's quota is dealt out round-robin (one slot per block
+    per round, in block order) so every matched block keeps its leading
+    questions and no domain is dropped. Deterministic.
+    """
+    if sum(len(b) for b in blocks) <= MAX_VERIFICATION_QUESTIONS:
+        return [q for b in blocks for q in b]
+    quotas = [0] * len(blocks)
+    remaining = MAX_VERIFICATION_QUESTIONS
+    while remaining:
+        for i, block in enumerate(blocks):
+            if remaining and quotas[i] < len(block):
+                quotas[i] += 1
+                remaining -= 1
+    return [q for block, n in zip(blocks, quotas) for q in block[:n]]
 
 
 def _generic_charge_item() -> LineItem:

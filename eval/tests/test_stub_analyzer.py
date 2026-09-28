@@ -235,6 +235,58 @@ class DomainNeutralityTests(unittest.TestCase):
                 self.assertNotIn(phrase, text, f"{phrase!r} leaked for quote: {q[:40]!r}")
 
 
+class MixedDomainQuestionBoundTests(unittest.TestCase):
+    """QC-HOTFIX: several domain blocks each add 3 questions; the combined list
+    must stay within the schema's 3..8 bound while keeping every block present."""
+
+    # Known reproduction: vehicle ("brake"), AC ("compressor") and generic-charge
+    # ("gas top-up") blocks match -> 9 questions before the fix.
+    THREE_DOMAINS = (
+        "Brake pad replacement. AC gas top-up. Leaking tap valve replacement. "
+        "Panel earthing check. Compressor overhaul after diagnosis."
+    )
+    FOUR_DOMAINS = THREE_DOMAINS + " Plumbing repair."  # adds the home block -> 12
+
+    # A distinctive fragment from each domain's question block.
+    VEHICLE_Q = "brake/tyre"
+    AC_Q = "refrigerant"
+    HOME_Q = "scope of work"
+    GENERIC_Q = "misc/service/handling"
+
+    def assertRepresented(self, questions, fragments):
+        joined = "\n".join(questions)
+        for frag in fragments:
+            self.assertIn(frag, joined, f"no question from block {frag!r}")
+
+    def test_three_domain_quote_is_schema_valid_and_bounded(self):
+        r = run(self.THREE_DOMAINS)
+        QuoteCheckResult.model_validate(r.model_dump(mode="json"))
+        self.assertGreaterEqual(len(r.verification_questions), 3)
+        self.assertLessEqual(len(r.verification_questions), 8)
+        self.assertRepresented(r.verification_questions, [self.VEHICLE_Q, self.AC_Q, self.GENERIC_Q])
+
+    def test_four_domain_quote_is_schema_valid_and_bounded(self):
+        r = run(self.FOUR_DOMAINS)
+        QuoteCheckResult.model_validate(r.model_dump(mode="json"))
+        self.assertGreaterEqual(len(r.verification_questions), 3)
+        self.assertLessEqual(len(r.verification_questions), 8)
+        self.assertRepresented(
+            r.verification_questions, [self.VEHICLE_Q, self.AC_Q, self.HOME_Q, self.GENERIC_Q]
+        )
+
+    def test_bounded_output_is_deterministic(self):
+        self.assertEqual(
+            run(self.FOUR_DOMAINS).verification_questions,
+            run(self.FOUR_DOMAINS).verification_questions,
+        )
+
+    def test_two_domain_quote_keeps_all_six_questions(self):
+        r = run("Brake pad replacement Rs. 4,000. Misc service charge Rs. 500.")
+        self.assertEqual(len(r.verification_questions), 6)
+        self.assertIn(self.VEHICLE_Q, r.verification_questions[0])
+        self.assertIn(self.GENERIC_Q, r.verification_questions[3])
+
+
 class PriceJudgmentTests(unittest.TestCase):
     def test_no_affirmative_price_judgment_phrases(self):
         # Assert only the exact high-precision termset phrases are absent — not
