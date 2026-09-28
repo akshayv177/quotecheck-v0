@@ -1,4 +1,4 @@
-"""SCALE-001 benchmark-tooling tests.
+"""SCALE-001 benchmark-tooling tests (extended in SCALE-003).
 
 Covers the harness's own correctness, not QuoteCheck capacity: percentile maths,
 fail-closed environment construction, concurrency-safe fake-provider counters,
@@ -11,8 +11,10 @@ Everything is loopback-only; no provider cost, no public host.
 from __future__ import annotations
 
 import contextlib
+import http.client
 import json
 import os
+import socket
 import tempfile
 import threading
 import unittest
@@ -30,10 +32,19 @@ from benchmarks.run_capacity import (
     SENTINEL_MODEL,
     assert_loopback_url,
     build_child_env,
+    clocks_shared,
     run_load,
 )
 from benchmarks.workloads import WORKLOADS
 from eval.tests.test_openai_reliability import isolated_shared_client, openai_mode_app
+
+
+def _post_responses(conn: http.client.HTTPConnection, text: str) -> int:
+    body = json.dumps({"model": SENTINEL_MODEL, "input": text}).encode()
+    conn.request("POST", "/v1/responses", body=body, headers={"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    resp.read()
+    return resp.status
 
 
 @contextlib.contextmanager
@@ -288,6 +299,138 @@ class LoadClientTests(unittest.TestCase):
         self.assertEqual(sorted(r["request_index"] for r in recs), list(range(12)))
         self.assertTrue(all(r["success"] and r["duration_s"] >= 0 for r in recs))
         self.assertGreaterEqual(wall, max(r["t_end_s"] for r in recs) - 1e-6)
+
+
+class FakeProviderTransportTests(unittest.TestCase):
+    """SCALE-003 repair of the reused-connection Nagle artifact. Deterministic
+    socket-option and reuse checks only; the latency effect is runtime evidence
+    (``python -m benchmarks.diag_keepalive``), not a unit-test threshold."""
+
+    def _accepted_nodelay(self, **kw) -> int:
+        srv = FakeProviderServer(0, latency_s=0, output_text="{}", **kw)
+        try:
+            with socket.create_connection(srv.server_address, timeout=5):
+                conn, _ = srv.get_request()
+                try:
+                    return conn.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
+                finally:
+                    conn.close()
+        finally:
+            srv.server_close()
+
+    def test_accepted_sockets_have_tcp_nodelay(self):
+        self.assertNotEqual(self._accepted_nodelay(), 0)
+
+    def test_tcp_nodelay_can_be_disabled_for_the_diagnostic_only(self):
+        self.assertEqual(self._accepted_nodelay(tcp_nodelay=False), 0)
+
+    def test_persistent_connection_is_reused(self):
+        with fake_server(latency_s=0) as srv:
+            conn = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+            try:
+                codes = [_post_responses(conn, f"q{i}") for i in range(5)]
+            finally:
+                conn.close()
+            snap = srv.state.snapshot()
+        self.assertEqual(codes, [200] * 5)
+        self.assertEqual(snap["connections_accepted"], 1)
+        self.assertEqual((snap["attempts_started"], snap["attempts_completed"]), (5, 5))
+
+
+class FakeProviderAttemptLogTests(unittest.TestCase):
+    def test_state_logs_marker_times_and_status(self):
+        state = FakeProviderState(latency_s=0)
+        seq = state.begin("m1")
+        state.end(seq, 200)
+        state.begin()          # SCALE-001 call shape still works
+        state.end()
+        a, b = state.attempts()
+        self.assertEqual((a["seq"], a["marker"], a["status"]), (1, "m1", 200))
+        self.assertLessEqual(a["t_start"], a["t_end"])
+        self.assertEqual((b["marker"], b["t_end"]), (None, None))
+        self.assertEqual(state.snapshot()["attempts_completed"], 2)
+        state.reset()
+        self.assertEqual(state.attempts(), [])
+
+    def test_http_fail_first_attempts_are_logged_per_marker(self):
+        with fake_server(latency_s=0, mode="fail_first") as srv:
+            conn = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+            try:
+                codes = [_post_responses(conn, "x [bench-marker:r1]"),
+                         _post_responses(conn, "x [bench-marker:r1]"),
+                         _post_responses(conn, "x [bench-marker:r2]")]
+                conn.request("GET", "/__attempts")
+                atts = json.loads(conn.getresponse().read())["attempts"]
+            finally:
+                conn.close()
+            snap = srv.state.snapshot()
+        self.assertEqual(codes, [503, 200, 503])
+        self.assertEqual([(a["marker"], a["status"]) for a in atts],
+                         [("r1", 503), ("r1", 200), ("r2", 503)])
+        self.assertTrue(all(a["t_start"] <= a["t_end"] for a in atts))
+        self.assertEqual(snap["injected_failures"], 2)
+        self.assertEqual(snap["attempts_started"], len(atts))
+
+    def test_clock_used_by_the_fake_is_the_harness_clock(self):
+        # Linux: perf_counter and monotonic are both CLOCK_MONOTONIC.
+        if not clocks_shared():
+            self.skipTest("perf_counter/monotonic differ on this platform")
+        self.assertTrue(clocks_shared())
+
+
+class TimelineStatsTests(unittest.TestCase):
+    IV = [(0.0, 2.0), (1.0, 3.0), (1.5, 2.5)]
+
+    def test_in_flight_at_is_half_open(self):
+        self.assertEqual(stats.in_flight_at(self.IV, 0.0), 1)
+        self.assertEqual(stats.in_flight_at(self.IV, 1.75), 3)
+        self.assertEqual(stats.in_flight_at(self.IV, 2.0), 2)
+        self.assertEqual(stats.in_flight_at(self.IV, 3.0), 0)
+
+    def test_mean_in_flight_and_time_at_level(self):
+        # busy time 2 + 2 + 1 = 5 over [0, 4]
+        self.assertAlmostEqual(stats.mean_in_flight(self.IV, 0.0, 4.0), 1.25)
+        # >= 2 during [1, 2.5] -> 1.5 of 4; >= 3 during [1.5, 2] -> 0.5 of 4
+        self.assertAlmostEqual(stats.time_frac_at_least(self.IV, 2, 0.0, 4.0), 0.375)
+        self.assertAlmostEqual(stats.time_frac_at_least(self.IV, 3, 0.0, 4.0), 0.125)
+        self.assertEqual(stats.time_frac_at_least(self.IV, 1, 5.0, 5.0), 0.0)
+
+    def test_decompose_request_with_retry(self):
+        atts = [{"t_start": 13.5, "t_end": 16.5}, {"t_start": 10.2, "t_end": 13.2}]
+        d = stats.decompose_request(10.0, 17.0, atts)
+        self.assertEqual(d["fake_attempts"], 2)
+        self.assertAlmostEqual(d["pre_provider_s"], 0.2)
+        self.assertAlmostEqual(d["provider_span_s"], 6.3)
+        self.assertAlmostEqual(d["post_provider_s"], 0.5)
+        self.assertAlmostEqual(d["inter_attempt_gap_s"], 0.3)
+        self.assertEqual(stats.decompose_request(0, 1, []), {})
+        self.assertEqual(stats.decompose_request(0, 1, [{"t_start": 0.1, "t_end": None}]), {})
+
+    def test_summarize_health_reports_all_and_exact_saturated_subset(self):
+        probes = [{"scenario": "h", "concurrency": 64, "probe_index": i,
+                   "duration_s": d, "http_status": 200, "error_code": None,
+                   "provider_in_flight_at_send": f, "analysis_outstanding_at_send": 64}
+                  for i, (d, f) in enumerate([(1.0, 40), (2.0, 39), (3.0, 40)])]
+        probes.append({"scenario": "h", "concurrency": 64, "probe_index": 3, "duration_s": 60.0,
+                       "http_status": None, "error_code": "client_exception:TimeoutError",
+                       "provider_in_flight_at_send": 40, "analysis_outstanding_at_send": 64})
+        (row,) = stats.summarize_health(probes, 40)
+        self.assertEqual(row["all_probes"]["n"], 4)
+        sat = row["probes_sent_at_provider_in_flight_eq_40"]
+        self.assertEqual(sat["n"], 3)
+        self.assertEqual(sat["timeouts"], 1)
+        self.assertEqual(sat["status_counts"], {"200": 2, "client_exception:TimeoutError": 1})
+        self.assertEqual(row["provider_in_flight_at_send_counts"], {"39": 1, "40": 3})
+
+    def test_phase_fields_only_appear_when_raw_records_carry_them(self):
+        key = {"experiment": "e", "scenario": "s", "workload_id": "w", "concurrency": 1}
+        trials = [{**key, "trial": 1, "wall_s": 1.0, "requests_planned": 1}]
+        plain = [{**key, "trial": 1, "duration_s": 0.5, "success": True, "http_status": 200}]
+        self.assertNotIn("phase_latency", stats.summarize(plain, trials)[0])
+        phased = [{**plain[0], "pre_provider_s": 0.1, "provider_span_s": 0.3,
+                   "post_provider_s": 0.1}]
+        row = stats.summarize(phased, trials)[0]
+        self.assertEqual(row["phase_latency"]["pre_provider"]["p50_ms"], 100.0)
 
 
 if __name__ == "__main__":

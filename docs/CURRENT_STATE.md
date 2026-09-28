@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-28 (SCALE-002)
+Last updated: 2026-09-28 (SCALE-003)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -313,6 +313,48 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Changed in SCALE-003
+
+**Measurement only.** No `backend/`, frontend, config, dependency or deployment
+change. The report is `docs/scalability/SCALE-003_SATURATION.md`, with raw evidence
+in `benchmarks/results/SCALE-003-saturation/`. Local, fake provider, ₹0.
+
+- **Fake-provider repair:**
+  - `benchmarks/fake_provider.py` sets `TCP_NODELAY` on accepted sockets. This
+    removes the ~40 ms reused-connection artifact: shared-SDK p50 went from
+    43.98 to 1.00 ms (`python -m benchmarks.diag_keepalive`).
+  - SCALE-001/002 used the original fake. Their provider-loop latencies aren't
+    directly interchangeable with SCALE-003's.
+- **Harness additions (tooling only):**
+  - The fake keeps a per-attempt monotonic timestamp log (`GET /__attempts`).
+  - The new `saturation` / `health` / `retry_sat` experiments split each request
+    into time before, during and after its provider calls.
+  - Timeline helpers and a health summary are in `stats.py`.
+  - `env.json` records clocks and harness file hashes.
+  - `--experiment all` still means the SCALE-001 set.
+  - Historical `stats --check` still passes.
+- **Tests:** 183 in the suite (was 172). There are 11 new benchmark-tooling tests
+  (30 in `test_benchmarks.py`), with no latency thresholds.
+- **Findings** (Decision Gate C; no mechanism implemented):
+  - **Worker tokens.** `/analyze` takes an anyio worker token for the endpoint,
+    and a second one for `response_model` validation. The sync `QuoteCheckError`
+    handler also takes one on failure. `/health` takes one. All share the default
+    FIFO `CapacityLimiter(40)`.
+  - **Above 40 in flight:**
+    - Throughput plateaus at about 40 / provider latency: 7.75 rps at 5 s,
+      dipping to 7.24 rps at C=64.
+    - Excess demand waits silently, never failing. Mean waiting is 2.9 s at
+      5 s / C=64. About 20% of requests wait more than half a provider period
+      *after* their provider call finished.
+  - **`/health`** returns 200 but at C ≥ 40 waits for a freed token. p95 is
+    2.4–2.8 s with a 3 s provider and 4.4–4.7 s with a 5 s provider. It is
+    unaffected at C=32.
+  - **Retry.** A transient-failure retry holds the token for 2 provider periods,
+    halving throughput (0.51×). A persistent outage at C=64 yields 503s after a
+    p50 of 11.8 s.
+  - QuoteCheck still has **no** explicit provider-concurrency budget, admission
+    control, overload response, or queueing signal.
 
 ### Changed in SCALE-002
 
