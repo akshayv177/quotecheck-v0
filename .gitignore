@@ -10,3 +10,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Generated benchmark bulk evidence
+# Keep compact summaries/provenance in Git; preserve full raw evidence externally.
+benchmarks/results/*/requests.jsonl
+benchmarks/results/*/health_load_requests.jsonl
+benchmarks/results/*/server/

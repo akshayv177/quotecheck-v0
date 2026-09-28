@@ -329,9 +329,7 @@ GET /health
 POST /analyze
 ```
 
-`POST /analyze` is a synchronous FastAPI `def` route.
-
-FastAPI executes normal synchronous path operations using its threadpool execution mechanism. The OpenAI SDK path is also synchronous and performs blocking provider I/O.
+Since SCALE-004, `POST /analyze` is a thin `async def` admission wrapper around the existing synchronous analysis body, which still runs on FastAPI/AnyIO's worker threadpool. The OpenAI SDK path is still synchronous and performs blocking provider I/O.
 
 Do not assume this architecture is inadequate.
 
@@ -366,7 +364,18 @@ explicit per-attempt timeout
 SDK retries disabled
 one application-owned transient retry
 maximum two provider attempts per request
+explicit provider admission (SCALE-004):
+  at most 32 admitted analyses in flight per process
+  (OPENAI_MAX_CONCURRENT_ANALYSES, fixed code constant)
+  admission decided before threadpool dispatch
+  capacity exhausted -> fail-fast HTTP 503 capacity_exceeded
+  rejected requests make zero provider calls
+  a retry stays inside its request's admission slot
 ```
+
+Demo mode bypasses provider admission.
+
+The admission budget is per process. Multiple Uvicorn processes or replicas multiply aggregate provider capacity; there is no cross-process coordination. 32 is a locally measured v1 budget, not a claim about real OpenAI or Railway capacity.
 
 There is no silent fallback from OpenAI mode to Demo mode.
 
@@ -378,7 +387,7 @@ The application does not currently have:
 * user sessions,
 * persistent application database,
 * public rate limiting,
-* aggregate provider-concurrency control,
+* cross-process (aggregate across processes/replicas) provider-concurrency control,
 * durable centralized hosted logging.
 
 Do not describe any of these as implemented.

@@ -14,7 +14,9 @@ sufficient):
 
 SCALE-003 additions are optional: summary rows only gain the phase / occupancy
 fields when the raw records carry them, so SCALE-001/002 summaries recompute
-byte-for-byte. Health probes are summarized separately (``health_summary.json``).
+byte-for-byte. SCALE-004 admission fields (rejected counts, rejection vs
+success latency, error codes) likewise appear only for trials the harness
+marked ``rejection_aware``. Health probes are summarized separately (``health_summary.json``).
 """
 
 from __future__ import annotations
@@ -30,6 +32,9 @@ from typing import Iterable, Sequence
 P99_MIN_SAMPLES = 1000
 
 POINT_KEY = ("experiment", "scenario", "workload_id", "concurrency")
+
+# SCALE-004: QuoteCheck's application-owned admission rejection code.
+CAPACITY_EXCEEDED = "capacity_exceeded"
 
 
 def nearest_rank(sorted_values: Sequence[float], p: float) -> float:
@@ -223,6 +228,12 @@ def summarize(requests: list[dict], trials: list[dict]) -> list[dict]:
                       "provider_time_frac_in_flight_ge_40"):
                 if k in t:
                     row_t[k] = t[k]
+            if t.get("rejection_aware"):
+                row_t["rejected"] = sum(1 for r in reqs
+                                        if r.get("error_code") == CAPACITY_EXCEEDED)
+                for k in ("issue_duration_s", "rejections_done_before_first_provider_end"):
+                    if k in t:
+                        row_t[k] = t[k]
             per_trial.append(row_t)
 
         tputs = [x["throughput_rps"] for x in per_trial if x["throughput_rps"] is not None]
@@ -262,8 +273,39 @@ def summarize(requests: list[dict], trials: list[dict]) -> list[dict]:
             row["phase_latency"] = phases
         if any("provider_mean_in_flight" in x for x in per_trial):
             row["all_trials_attempts_joined"] = all(x.get("attempts_joined") for x in per_trial)
+        if any(t.get("rejection_aware") for t in pts):
+            row["admission"] = _admission_block(
+                [r for t in pts for r in req_by_trial.get(key + (t["trial"],), [])], per_trial)
         rows.append(row)
     return rows
+
+
+def _admission_block(reqs: list[dict], per_trial: list[dict]) -> dict:
+    """SCALE-004: separate admission rejections from successes and from every
+    other failure, with a latency summary for each."""
+    rej = [r for r in reqs if r.get("error_code") == CAPACITY_EXCEEDED]
+    ok = [r for r in reqs if r["success"]]
+    codes: dict[str, int] = defaultdict(int)
+    for r in reqs:
+        if not r["success"]:
+            codes[str(r.get("error_code"))] += 1
+    out = {
+        "rejected": len(rej),
+        "admitted": len(reqs) - len(rej),
+        "non_rejection_failures": len(reqs) - len(rej) - len(ok),
+        "failure_code_counts": dict(sorted(codes.items())),
+        "rejection_http_status_counts": dict(sorted(_counts(
+            r["http_status"] for r in rej).items())),
+        "rejected_with_provider_attempts": sum(
+            1 for r in rej if r.get("provider_attempts") or r.get("fake_attempts")),
+        "rejection_latency": latency_summary(r["duration_s"] for r in rej),
+        "success_latency": latency_summary(r["duration_s"] for r in ok),
+    }
+    flags = [x["rejections_done_before_first_provider_end"] for x in per_trial
+             if "rejections_done_before_first_provider_end" in x]
+    if flags:
+        out["all_rejections_done_before_first_provider_end"] = all(flags)
+    return out
 
 
 def read_jsonl(path: Path) -> list[dict]:

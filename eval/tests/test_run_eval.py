@@ -172,6 +172,31 @@ class ExecutionErrorWrappingTests(unittest.TestCase):
         self.assertEqual(format_execution_error(ValueError("x")), "ValueError: x")
 
 
+class RouteAdapterTests(unittest.TestCase):
+    """SCALE-004: the /analyze route is async; the runner must still execute it."""
+
+    def test_async_route_runs_to_a_result_in_demo_mode(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        import backend.app as appmod
+        from backend.core.schema import QuoteCheckResult
+
+        with tempfile.TemporaryDirectory() as td, \
+             mock.patch.object(appmod, "USE_OPENAI", False), \
+             mock.patch.object(appmod, "ANALYZER_NAME", "demo"), \
+             mock.patch.object(appmod, "APP_RUN_LOG_PATH", str(Path(td) / "r.jsonl")):
+            fn = run_eval.sync_route_adapter(appmod.analyze)
+            result = fn(AnalyzeRequest(quote_text="Replace brake pads: $240."))
+        self.assertIsInstance(result, QuoteCheckResult)
+        self.assertEqual(result.metadata.model, "quotecheck-demo-analyzer")
+
+    def test_sync_callables_pass_through(self):
+        f = lambda req: req  # noqa: E731
+        self.assertIs(run_eval.sync_route_adapter(f), f)
+
+
 class PaidModeGuardTests(unittest.TestCase):
     def test_openai_without_allow_paid_never_reaches_analysis_path(self):
         calls = []
