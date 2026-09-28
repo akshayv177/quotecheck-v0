@@ -1,0 +1,100 @@
+== SCALE-004: provider admission before/after set
+    adm_burst_lat3s C=32 trial=1 n=32 fail=0 wall=3.16s rej=0 rej_p95=None ok_rps=10.14 rps=10.1 p50=3128.42 p95=3153.92 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat3s C=32 trial=2 n=32 fail=0 wall=3.16s rej=0 rej_p95=None ok_rps=10.12 rps=10.1 p50=3129.87 p95=3158.91 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat3s C=32 trial=3 n=32 fail=0 wall=3.15s rej=0 rej_p95=None ok_rps=10.14 rps=10.1 p50=3124.5 p95=3150.62 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat3s C=32 trial=4 n=32 fail=0 wall=3.20s rej=0 rej_p95=None ok_rps=10.01 rps=10.0 p50=3167.89 p95=3193.02 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat3s C=32 trial=5 n=32 fail=0 wall=3.16s rej=0 rej_p95=None ok_rps=10.14 rps=10.1 p50=3123.89 p95=3152.98 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat3s C=40 trial=1 n=40 fail=0 wall=3.20s rej=0 rej_p95=None ok_rps=12.51 rps=12.5 p50=3156.72 p95=3195.49 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat3s C=40 trial=2 n=40 fail=0 wall=3.20s rej=0 rej_p95=None ok_rps=12.50 rps=12.5 p50=3159.52 p95=3195.8 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat3s C=40 trial=3 n=40 fail=0 wall=3.24s rej=0 rej_p95=None ok_rps=12.35 rps=12.4 p50=3195.85 p95=3232.12 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat3s C=40 trial=4 n=40 fail=0 wall=3.20s rej=0 rej_p95=None ok_rps=12.52 rps=12.5 p50=3154.39 p95=3190.88 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat3s C=40 trial=5 n=40 fail=0 wall=3.20s rej=0 rej_p95=None ok_rps=12.49 rps=12.5 p50=3157.38 p95=3199.27 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat3s C=64 trial=1 n=64 fail=0 wall=6.30s rej=0 rej_p95=None ok_rps=10.16 rps=10.2 p50=3248.56 p95=6287.65 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat3s C=64 trial=2 n=64 fail=0 wall=6.28s rej=0 rej_p95=None ok_rps=10.19 rps=10.2 p50=3251.48 p95=6274.02 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat3s C=64 trial=3 n=64 fail=0 wall=6.29s rej=0 rej_p95=None ok_rps=10.18 rps=10.2 p50=3244.05 p95=6280.58 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat3s C=64 trial=4 n=64 fail=0 wall=6.36s rej=0 rej_p95=None ok_rps=10.07 rps=10.1 p50=3294.16 p95=6341.12 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat3s C=64 trial=5 n=64 fail=0 wall=6.29s rej=0 rej_p95=None ok_rps=10.18 rps=10.2 p50=3248.74 p95=6280.88 thr_peak=41 prov_peak=40 att=64
+  done adm_burst_lat3s: ladder=[32, 40, 64] stopped_by=None
+    adm_burst_lat5s C=32 trial=1 n=32 fail=0 wall=5.16s rej=0 rej_p95=None ok_rps=6.21 rps=6.2 p50=5118.76 p95=5154.88 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat5s C=32 trial=2 n=32 fail=0 wall=5.15s rej=0 rej_p95=None ok_rps=6.21 rps=6.2 p50=5119.69 p95=5148.78 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat5s C=32 trial=3 n=32 fail=0 wall=5.15s rej=0 rej_p95=None ok_rps=6.21 rps=6.2 p50=5123.12 p95=5149.4 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat5s C=32 trial=4 n=32 fail=0 wall=5.18s rej=0 rej_p95=None ok_rps=6.17 rps=6.2 p50=5146.7 p95=5176.91 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat5s C=32 trial=5 n=32 fail=0 wall=5.17s rej=0 rej_p95=None ok_rps=6.19 rps=6.2 p50=5114.1 p95=5150.8 thr_peak=33 prov_peak=32 att=32
+    adm_burst_lat5s C=40 trial=1 n=40 fail=0 wall=5.21s rej=0 rej_p95=None ok_rps=7.67 rps=7.7 p50=5171.68 p95=5208.07 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat5s C=40 trial=2 n=40 fail=0 wall=5.20s rej=0 rej_p95=None ok_rps=7.70 rps=7.7 p50=5157.41 p95=5192.11 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat5s C=40 trial=3 n=40 fail=0 wall=5.22s rej=0 rej_p95=None ok_rps=7.66 rps=7.7 p50=5181.55 p95=5213.45 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat5s C=40 trial=4 n=40 fail=0 wall=5.20s rej=0 rej_p95=None ok_rps=7.69 rps=7.7 p50=5150.88 p95=5198.88 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat5s C=40 trial=5 n=40 fail=0 wall=5.19s rej=0 rej_p95=None ok_rps=7.70 rps=7.7 p50=5151.78 p95=5186.99 thr_peak=41 prov_peak=40 att=40
+    adm_burst_lat5s C=64 trial=1 n=64 fail=0 wall=10.30s rej=0 rej_p95=None ok_rps=6.21 rps=6.2 p50=5270.38 p95=10297.61 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat5s C=64 trial=2 n=64 fail=0 wall=10.27s rej=0 rej_p95=None ok_rps=6.23 rps=6.2 p50=5243.81 p95=10265.48 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat5s C=64 trial=3 n=64 fail=0 wall=10.28s rej=0 rej_p95=None ok_rps=6.23 rps=6.2 p50=5249.19 p95=10267.27 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat5s C=64 trial=4 n=64 fail=0 wall=10.33s rej=0 rej_p95=None ok_rps=6.20 rps=6.2 p50=5281.95 p95=10316.77 thr_peak=41 prov_peak=40 att=64
+    adm_burst_lat5s C=64 trial=5 n=64 fail=0 wall=10.28s rej=0 rej_p95=None ok_rps=6.23 rps=6.2 p50=5238.98 p95=10268.96 thr_peak=41 prov_peak=40 att=64
+  done adm_burst_lat5s: ladder=[32, 40, 64] stopped_by=None
+    adm_sustained_5000ms C=32 trial=1 n=128 fail=0 wall=20.51s rej=0 rej_p95=None ok_rps=6.24 rps=6.2 p50=5095.86 p95=5232.38 thr_peak=33 prov_peak=32 att=128
+    adm_sustained_5000ms C=32 trial=2 n=128 fail=0 wall=20.61s rej=0 rej_p95=None ok_rps=6.21 rps=6.2 p50=5109.07 p95=5289.74 thr_peak=33 prov_peak=32 att=128
+    adm_sustained_5000ms C=32 trial=3 n=128 fail=0 wall=20.55s rej=0 rej_p95=None ok_rps=6.23 rps=6.2 p50=5100.29 p95=5227.91 thr_peak=33 prov_peak=32 att=128
+    adm_sustained_5000ms C=40 trial=1 n=160 fail=0 wall=20.71s rej=0 rej_p95=None ok_rps=7.73 rps=7.7 p50=5147.57 p95=5306.05 thr_peak=41 prov_peak=40 att=160
+    adm_sustained_5000ms C=40 trial=2 n=160 fail=0 wall=20.72s rej=0 rej_p95=None ok_rps=7.72 rps=7.7 p50=5137.42 p95=5287.72 thr_peak=41 prov_peak=40 att=160
+    adm_sustained_5000ms C=40 trial=3 n=160 fail=0 wall=20.68s rej=0 rej_p95=None ok_rps=7.74 rps=7.7 p50=5130.63 p95=5294.21 thr_peak=41 prov_peak=40 att=160
+    adm_sustained_5000ms C=64 trial=1 n=178 fail=0 wall=25.66s rej=0 rej_p95=None ok_rps=6.94 rps=6.9 p50=5559.14 p95=10416.55 thr_peak=41 prov_peak=40 att=178
+    adm_sustained_5000ms C=64 trial=2 n=178 fail=0 wall=25.56s rej=0 rej_p95=None ok_rps=6.96 rps=7.0 p50=9605.92 p95=10384.1 thr_peak=41 prov_peak=40 att=178
+    adm_sustained_5000ms C=64 trial=3 n=176 fail=0 wall=25.55s rej=0 rej_p95=None ok_rps=6.89 rps=6.9 p50=9719.28 p95=10346.69 thr_peak=41 prov_peak=40 att=176
+  done adm_sustained_5000ms: ladder=[32, 40, 64] stopped_by=None
+    adm_sustained_5000ms_nobackoff C=64 trial=1 n=172 fail=0 wall=25.31s rej=0 rej_p95=None ok_rps=6.80 rps=6.8 p50=9720.13 p95=10366.08 thr_peak=41 prov_peak=40 att=172
+    adm_sustained_5000ms_nobackoff C=64 trial=2 n=176 fail=0 wall=25.59s rej=0 rej_p95=None ok_rps=6.88 rps=6.9 p50=5472.69 p95=15136.15 thr_peak=41 prov_peak=40 att=176
+    adm_sustained_5000ms_nobackoff C=64 trial=3 n=177 fail=0 wall=25.66s rej=0 rej_p95=None ok_rps=6.90 rps=6.9 p50=9501.48 p95=10403.5 thr_peak=41 prov_peak=40 att=177
+  done adm_sustained_5000ms_nobackoff: ladder=[64] stopped_by=None
+  adm_health_lat3s idle: probes=40 non200=0 p50=1.54 p95=1.86 max=2.15
+    adm_health_lat3s C=32: probes=40 non200=0 p50=1.56 p95=3.91 max=7.4 load_reqs=224 load_fail=0 load_rej=0 rej_p95=None thr_peak=34 prov_peak=32
+    adm_health_lat3s C=40: probes=40 non200=0 p50=36.73 p95=2160.94 max=2483.88 load_reqs=521 load_fail=0 load_rej=0 rej_p95=None thr_peak=41 prov_peak=40
+    adm_health_lat3s C=64: probes=40 non200=0 p50=350.19 p95=2683.83 max=2800.04 load_reqs=784 load_fail=0 load_rej=0 rej_p95=None thr_peak=41 prov_peak=40
+  done adm_health_lat3s: ladder=[32, 40, 64] stopped_by=None
+  adm_health_lat5s idle: probes=40 non200=0 p50=1.43 p95=1.61 max=1.64
+    adm_health_lat5s C=32: probes=40 non200=0 p50=1.4 p95=1.75 max=16.81 load_reqs=128 load_fail=0 load_rej=0 rej_p95=None thr_peak=34 prov_peak=32
+    adm_health_lat5s C=40: probes=40 non200=0 p50=20.19 p95=4582.19 max=4671.55 load_reqs=679 load_fail=0 load_rej=0 rej_p95=None thr_peak=41 prov_peak=40
+    adm_health_lat5s C=64: probes=40 non200=0 p50=410.53 p95=4645.84 max=4884.04 load_reqs=711 load_fail=0 load_rej=0 rej_p95=None thr_peak=41 prov_peak=40
+  done adm_health_lat5s: ladder=[32, 40, 64] stopped_by=None
+  adm_health_5000ms_nobackoff idle: probes=40 non200=0 p50=1.62 p95=1.87 max=2.73
+    adm_health_5000ms_nobackoff C=64: probes=40 non200=0 p50=222.31 p95=4685.27 max=4775.25 load_reqs=839 load_fail=0 load_rej=0 rej_p95=None thr_peak=41 prov_peak=40
+  done adm_health_5000ms_nobackoff: ladder=[64] stopped_by=None
+    adm_retry_fail_first_burst_3000ms C=64 trial=1 n=64 fail=0 wall=12.29s rej=0 rej_p95=None ok_rps=5.21 rps=5.2 p50=6273.05 p95=12278.37 thr_peak=41 prov_peak=40 att=128
+    adm_retry_fail_first_burst_3000ms C=64 trial=2 n=64 fail=0 wall=12.29s rej=0 rej_p95=None ok_rps=5.21 rps=5.2 p50=6249.68 p95=12277.38 thr_peak=41 prov_peak=40 att=128
+    adm_retry_fail_first_burst_3000ms C=64 trial=3 n=64 fail=0 wall=12.28s rej=0 rej_p95=None ok_rps=5.21 rps=5.2 p50=6251.39 p95=12258.63 thr_peak=41 prov_peak=40 att=128
+    adm_retry_fail_first_burst_3000ms C=64 trial=4 n=64 fail=0 wall=12.33s rej=0 rej_p95=None ok_rps=5.19 rps=5.2 p50=6295.15 p95=12319.78 thr_peak=41 prov_peak=40 att=128
+    adm_retry_fail_first_burst_3000ms C=64 trial=5 n=64 fail=0 wall=12.28s rej=0 rej_p95=None ok_rps=5.21 rps=5.2 p50=6250.43 p95=12269.09 thr_peak=41 prov_peak=40 att=128
+  done adm_retry_fail_first_burst_3000ms: ladder=[64] stopped_by=None
+    adm_retry_fail_first_sustained_3000ms C=64 trial=1 n=97 fail=0 wall=18.35s rej=0 rej_p95=None ok_rps=5.29 rps=5.3 p50=6356.59 p95=12350.26 thr_peak=41 prov_peak=40 att=194
+    adm_retry_fail_first_sustained_3000ms C=64 trial=2 n=96 fail=0 wall=18.33s rej=0 rej_p95=None ok_rps=5.24 rps=5.2 p50=6293.26 p95=12352.56 thr_peak=41 prov_peak=40 att=192
+    adm_retry_fail_first_sustained_3000ms C=64 trial=3 n=95 fail=0 wall=18.34s rej=0 rej_p95=None ok_rps=5.18 rps=5.2 p50=11908.68 p95=12298.4 thr_peak=41 prov_peak=40 att=190
+  done adm_retry_fail_first_sustained_3000ms: ladder=[64] stopped_by=None
+    adm_retry_fail_always_sustained_3000ms C=64 trial=1 n=97 fail=97 wall=18.30s rej=0 rej_p95=None ok_rps=0.00 rps=5.3 p50=6307.38 p95=12309.46 thr_peak=41 prov_peak=40 att=194
+    adm_retry_fail_always_sustained_3000ms C=64 trial=2 n=98 fail=98 wall=18.31s rej=0 rej_p95=None ok_rps=0.00 rps=5.4 p50=6272.43 p95=12331.21 thr_peak=41 prov_peak=40 att=196
+    adm_retry_fail_always_sustained_3000ms C=64 trial=3 n=96 fail=96 wall=18.39s rej=0 rej_p95=None ok_rps=0.00 rps=5.2 p50=6416.2 p95=12444.17 thr_peak=41 prov_peak=40 att=192
+  done adm_retry_fail_always_sustained_3000ms: ladder=[64] stopped_by=None
+experiment	scenario	workload	C	reqs	ok	fail	rps(mean)	p50ms	p95ms	maxms	prov_att	peak_inflt	thr_peak
+admission	adm_burst_lat3s	normal	32	160	160	0	10.11	3133.95	3179.21	3195.6	160	32	33
+admission	adm_burst_lat3s	normal	40	200	200	0	12.47	3165.35	3216.73	3235.69	200	40	41
+admission	adm_burst_lat3s	normal	64	320	320	0	10.16	3265.94	6322.7	6354.2	320	40	41
+admission	adm_burst_lat5s	normal	32	160	160	0	6.2	5127.06	5162.15	5180.33	160	32	33
+admission	adm_burst_lat5s	normal	40	200	200	0	7.68	5161.77	5206.06	5217.44	200	40	41
+admission	adm_burst_lat5s	normal	64	320	320	0	6.22	5265.99	10304.05	10328.24	320	40	41
+admission	adm_retry_fail_always_sustained_3000ms	normal	64	291	0	291	0.0	6399.91	12390.78	12527.63	582	40	41
+admission	adm_retry_fail_first_burst_3000ms	normal	64	320	320	0	5.21	6270.7	12279.03	12328.78	640	40	41
+admission	adm_retry_fail_first_sustained_3000ms	normal	64	288	288	0	5.24	6356.59	12345.79	12372.72	576	40	41
+admission	adm_sustained_5000ms	normal	32	384	384	0	6.23	5101.63	5252.02	5355.19	384	32	33
+admission	adm_sustained_5000ms	normal	40	480	480	0	7.73	5137.4	5299.45	5361.66	480	40	41
+admission	adm_sustained_5000ms	normal	64	532	532	0	6.93	9677.69	10385.94	15378.97	532	40	41
+admission	adm_sustained_5000ms_nobackoff	normal	64	525	525	0	6.86	9614.97	10399.09	15429.19	525	40	41
+health adm_health_5000ms_nobackoff C=0: all n=40 p50=1.62 p95=1.87 max=2.73 status={'200': 40} | at-40 n=0 p50=None p95=None
+health adm_health_5000ms_nobackoff C=64: all n=40 p50=222.31 p95=4685.27 max=4775.25 status={'200': 40} | at-40 n=20 p50=4493.38 p95=4686.77
+health adm_health_lat3s C=0: all n=40 p50=1.54 p95=1.86 max=2.15 status={'200': 40} | at-40 n=0 p50=None p95=None
+health adm_health_lat3s C=32: all n=40 p50=1.56 p95=3.91 max=7.4 status={'200': 40} | at-40 n=0 p50=None p95=None
+health adm_health_lat3s C=40: all n=40 p50=36.73 p95=2160.94 max=2483.88 status={'200': 40} | at-40 n=21 p50=1775.83 p95=2274.49
+health adm_health_lat3s C=64: all n=40 p50=350.19 p95=2683.83 max=2800.04 status={'200': 40} | at-40 n=17 p50=2556.95 p95=2800.04
+health adm_health_lat5s C=0: all n=40 p50=1.43 p95=1.61 max=1.64 status={'200': 40} | at-40 n=0 p50=None p95=None
+health adm_health_lat5s C=32: all n=40 p50=1.4 p95=1.75 max=16.81 status={'200': 40} | at-40 n=0 p50=None p95=None
+health adm_health_lat5s C=40: all n=40 p50=20.19 p95=4582.19 max=4671.55 status={'200': 40} | at-40 n=23 p50=4244.11 p95=4582.19
+health adm_health_lat5s C=64: all n=40 p50=410.53 p95=4645.84 max=4884.04 status={'200': 40} | at-40 n=17 p50=4333.03 p95=4884.04
+
+results: /tmp/claude-1000/-home-akshay-dev-projects-quotecheck-v0/c8a88320-7f0b-452e-b1c2-e36c4dc283ff/scratchpad/wt_before/benchmarks/results/SCALE-004-before

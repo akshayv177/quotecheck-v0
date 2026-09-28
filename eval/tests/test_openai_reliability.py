@@ -535,6 +535,7 @@ _ROUTE_CASES = [
     (FailureCategory.INVALID_MODEL_OUTPUT, 502, False),
     (FailureCategory.CONFIGURATION_ERROR, 503, False),
     (FailureCategory.INTERNAL_ERROR, 500, False),
+    (FailureCategory.CAPACITY_EXCEEDED, 503, True),
 ]
 
 

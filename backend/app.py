@@ -57,6 +57,7 @@ from dotenv import load_dotenv
 # eval runner's QUOTECHECK_USE_OPENAI — authoritative over the file.
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
@@ -65,6 +66,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 
 from backend.core.schema import AnalyzeRequest, MAX_QUOTE_TEXT_CHARS, QuoteCheckResult
@@ -77,6 +79,7 @@ from backend.core.config import (
     MODEL,
     USE_OPENAI,
 )
+from backend.core.admission import provider_admission
 from backend.core.errors import FailureCategory, QuoteCheckError, error_response_body
 from backend.core.openai_analyzer import analyze_quote_openai
 from backend.core.stub_analyzer import analyze_quote_stub
@@ -89,11 +92,15 @@ ANALYZER_NAME = "openai" if USE_OPENAI else "demo"
 
 
 @app.exception_handler(QuoteCheckError)
-def _quotecheck_error_handler(request: Request, exc: QuoteCheckError) -> JSONResponse:
+async def _quotecheck_error_handler(request: Request, exc: QuoteCheckError) -> JSONResponse:
     """Render a classified failure as a small, user-safe JSON body.
 
     Never exposes stack traces, API keys, raw provider payloads, or internal
     filenames — only ``code``, ``message``, ``retryable``, ``request_id``.
+
+    ``async`` since SCALE-004: it is pure rendering, and as a sync handler
+    Starlette would dispatch it to the worker threadpool, so a
+    ``capacity_exceeded`` rejection would have to queue for a worker token.
     """
     return JSONResponse(status_code=exc.http_status, content=error_response_body(exc))
 
@@ -163,7 +170,7 @@ def health():
 
 
 @app.post("/analyze", response_model=QuoteCheckResult)
-def analyze(req: AnalyzeRequest):
+async def analyze(req: AnalyzeRequest):
     """
     Analyze a service quote and return a structured QuoteCheckResult.
 
@@ -172,13 +179,90 @@ def analyze(req: AnalyzeRequest):
     - If USE_OPENAI is enabled: call OpenAI analyzer (Responses API, strict schema)
     - Otherwise: call deterministic stub analyzer
 
+    Provider admission (SCALE-004)
+    ------------------------------
+    This coroutine is a narrow wrapper; the analysis itself (and the blocking
+    provider call) stays synchronous in ``_analyze_sync`` on the worker
+    threadpool. In OpenAI mode a slot is taken *here*, on the event loop,
+    before anything is dispatched to the threadpool, so admission is decided
+    before anyio's worker queue can become the admission mechanism. No free
+    slot -> an immediate ``capacity_exceeded`` (503) with zero provider calls.
+
+    The slot covers the whole threadpool call, including the retry, and is
+    released exactly once, when that call has finished. The admitted work runs
+    in its own task behind ``asyncio.shield``: if this request's task is
+    cancelled (e.g. uvicorn's graceful-shutdown timeout), the caller stops
+    waiting but the slot stays held until the worker thread - and so the
+    provider call - is actually done. (anyio's shielded ``run_sync`` does not
+    stop a native asyncio ``Task.cancel()`` from resuming the awaiting
+    coroutine early, so releasing after a plain ``await`` could free a slot
+    while its provider call is still running.) Demo mode takes no slot.
+
     Observability
     -------------
     Always logs exactly one JSONL record to logs/app_runs.jsonl per request
-    (success or failure), including risk_counts and uncertainty markers.
+    (success, failure, or admission rejection).
     """
-    t0 = time.perf_counter()
+    t_entry = time.perf_counter()
     request_id = str(uuid.uuid4())
+    if not USE_OPENAI:
+        return await run_in_threadpool(_analyze_sync, req, request_id)
+
+    if not provider_admission.try_acquire():
+        err = QuoteCheckError(
+            FailureCategory.CAPACITY_EXCEEDED,
+            request_id=request_id,
+            provider_attempts=0,
+            detail=(
+                f"provider admission budget full "
+                f"({provider_admission.in_flight}/{provider_admission.capacity} in flight)"
+            ),
+        )
+        # Synchronous JSONL append on the event loop: its cost is part of the
+        # measured rejection latency (SCALE-004 evidence), not hidden elsewhere.
+        _safe_log(
+            log_path=APP_RUN_LOG_PATH,
+            request_id=request_id,
+            prompt_version=PROMPT_VERSION,
+            model=MODEL,
+            latency_ms=int((time.perf_counter() - t_entry) * 1000),
+            schema_valid=False,
+            num_items=0,
+            risk_counts={"red": 0, "yellow": 0, "green": 0},
+            uncertainty={},
+            error=err.log_error_field(),
+            analyzer=ANALYZER_NAME,
+            success=False,
+            failure_category=err.category.value,
+            retryable=err.retryable,
+            provider_attempts=0,
+        )
+        raise err
+
+    admitted = asyncio.get_running_loop().create_task(_run_admitted(req, request_id))
+    admitted.add_done_callback(_consume_task_outcome)
+    return await asyncio.shield(admitted)
+
+
+async def _run_admitted(req: AnalyzeRequest, request_id: str):
+    """Run one admitted OpenAI-mode analysis; release its slot exactly once, after
+    the worker thread has returned (success or any failure)."""
+    try:
+        return await run_in_threadpool(_analyze_sync, req, request_id)
+    finally:
+        provider_admission.release()
+
+
+def _consume_task_outcome(task: "asyncio.Task") -> None:
+    """Retrieve an abandoned admitted task's exception (its caller was cancelled),
+    so asyncio doesn't report it as never retrieved. The run log already has it."""
+    if not task.cancelled():
+        task.exception()
+
+
+def _analyze_sync(req: AnalyzeRequest, request_id: str):
+    """The synchronous analysis body (unchanged by SCALE-004), run on a worker thread."""
+    t0 = time.perf_counter()
     # Provenance must stay mode-accurate on every path: a Demo-mode failure
     # never called OpenAI, so it must not log an OpenAI model id.
     failure_model = MODEL if USE_OPENAI else DEMO_ANALYZER_MODEL

@@ -98,6 +98,8 @@ HEALTH_PROBE_TIMEOUT_S = 60.0
 # The anyio default thread limiter QuoteCheck currently runs under (a framework
 # default, not a QuoteCheck budget). Used only to label saturation evidence.
 ANYIO_DEFAULT_TOKENS = 40
+# SCALE-004: QuoteCheck's application-owned admission rejection code.
+CAPACITY_EXCEEDED = "capacity_exceeded"
 
 PACKAGES = ("fastapi", "starlette", "uvicorn", "anyio", "h11", "uvloop", "httptools",
             "openai", "httpx", "pydantic", "python-dotenv")
@@ -425,13 +427,16 @@ class ProcSampler(threading.Thread):
 
 def run_load(port: int, *, method: str, path: str, bodies: list[bytes | None],
              concurrency: int, abort: threading.Event | None = None,
-             timeout_s: float = 180.0, clock_out: dict | None = None
-             ) -> tuple[list[dict], float]:
+             timeout_s: float = 180.0, clock_out: dict | None = None,
+             reject_backoff_s: float | None = None) -> tuple[list[dict], float]:
     """Issue ``len(bodies)`` requests with ``concurrency`` workers.
 
     Returns per-request records (times relative to the shared start instant)
     and the wall time from start to the last response. If ``clock_out`` is
     given, ``clock_out["t0"]`` receives that start instant (``perf_counter``).
+    SCALE-004: with ``reject_backoff_s`` set, a worker whose request was
+    rejected by QuoteCheck admission (``capacity_exceeded``) pauses that long
+    before taking its next request (0 = resend immediately).
     """
     n = len(bodies)
     next_idx = [0]
@@ -469,6 +474,9 @@ def run_load(port: int, *, method: str, path: str, bodies: list[bytes | None],
             te = time.perf_counter()
             out.append({"request_index": i, "worker": wid, "_ts": ts, "_te": te,
                         "http_status": status, "_data": data, "error_code": err})
+            if (reject_backoff_s is not None and status == 503
+                    and CAPACITY_EXCEEDED.encode() in data and reject_backoff_s > 0):
+                time.sleep(reject_backoff_s)
         conn.close()
 
     threads = [threading.Thread(target=worker, args=(w,), daemon=True)
@@ -518,6 +526,27 @@ def analyze_body(text: str) -> bytes:
     return json.dumps({"quote_text": text}).encode("utf-8")
 
 
+# SCALE-004 duration-bounded points: an upper bound on requests issued, never
+# expected to be reached (the watchdog stops issuing after ``duration_s``).
+DURATION_BOUND_MAX_REQUESTS = 10_000_000
+
+
+class LazyBodies:
+    """A read-only sequence of request bodies built on demand, so a
+    duration-bounded load needs no precomputed body list."""
+
+    def __init__(self, n: int, body_for, prefix: str):
+        self._n, self._body_for, self._prefix = n, body_for, prefix
+
+    def __len__(self) -> int:
+        return self._n
+
+    def __getitem__(self, i: int) -> bytes:
+        if not 0 <= i < self._n:
+            raise IndexError(i)
+        return self._body_for(f"{self._prefix}{i}")
+
+
 def _read_log_slice(log_path: Path, offset: int) -> list[dict]:
     if not log_path.exists():
         return []
@@ -561,7 +590,11 @@ class Run:
                  use_openai: bool, fake: FakeProviderProcess | None = None,
                  fake_cfg: dict | None = None, seq_warmup: int = 20,
                  expected_attempts_per_request: int | None = None,
-                 expect_failures: bool = False, join_attempts: bool = False) -> None:
+                 expect_failures: bool = False, join_attempts: bool = False,
+                 admission: dict | None = None) -> None:
+        """``admission`` (SCALE-004 only) makes the point rejection-aware: keys
+        ``trials`` (override), ``duration_s`` (stop issuing after this long; else
+        ``n_for``), ``reject_backoff_s`` (see ``run_load``), ``mode`` (label)."""
         if self.host_guard:
             return
         log_path = self.server_dir / f"{scenario}__app_runs.jsonl"
@@ -585,6 +618,9 @@ class Run:
         }
         if join_attempts:
             meta["join_attempts"] = True
+        if admission is not None:
+            meta["admission"] = admission
+            meta["trials_per_point"] = admission.get("trials") or self.trials
         try:
             # Deterministic sequential warm-up (process start / first-request effects).
             warm, _ = run_load(srv.port, method=method, path=path,
@@ -603,7 +639,7 @@ class Run:
                     meta["stopped_by"] = stop
                     break
                 prev = self._point(srv, sampler, meta, fake, log_path, c, n_for(c), body_for,
-                                   expected_attempts_per_request, join_attempts)
+                                   expected_attempts_per_request, join_attempts, admission)
                 meta["ladder_executed"].append(c)
                 if self.host_guard:
                     meta["stopped_by"] = self.host_guard
@@ -638,7 +674,12 @@ class Run:
             mine = by_marker.get(m.group(1), []) if m else []
             d = stats.decompose_request(t0 + r["t_start_s"], t0 + r["t_end_s"], mine)
             r.update(d)
-            if not d or d["fake_attempts"] != r.get("provider_attempts"):
+            if r.get("error_code") == CAPACITY_EXCEEDED:
+                # SCALE-004: an admission rejection must reach the provider zero
+                # times, both in the fake's log and in QuoteCheck's own record.
+                if m is None or mine or r.get("provider_attempts") != 0:
+                    joined = False
+            elif not d or d["fake_attempts"] != r.get("provider_attempts"):
                 joined = False
         joined = joined and sum(len(v) for v in by_marker.values()) == len(atts)
         intervals = [(a["t_start"], a["t_end"]) for a in atts if a["t_end"] is not None]
@@ -648,6 +689,13 @@ class Run:
             stats.mean_in_flight(intervals, t0, t0 + wall), 3)
         trial_rec["provider_time_frac_in_flight_ge_40"] = round(
             stats.time_frac_at_least(intervals, ANYIO_DEFAULT_TOKENS, t0, t0 + wall), 4)
+        rejected = [r for r in recs if r.get("error_code") == CAPACITY_EXCEEDED]
+        if trial_rec.get("admission_mode") == "burst" and rejected:
+            # Fail-fast ordering (single-wave bursts only): did every rejection
+            # complete before the first admitted provider attempt finished?
+            ends = [a["t_end"] for a in atts if a["t_end"] is not None]
+            trial_rec["rejections_done_before_first_provider_end"] = bool(ends) and all(
+                t0 + r["t_end_s"] < min(ends) for r in rejected)
         if not joined:
             print(f"    WARNING: attempt join failed {key} trial {trial}", flush=True)
 
@@ -657,7 +705,7 @@ class Run:
 
     def health(self, *, scenario: str, latency_s: float, ladder: list[int], probes_n: int,
                fake: "FakeProviderProcess", body_for, seq_warmup: int, seed: int,
-               gap_s: tuple[float, float] = (0.2, 0.6)) -> None:
+               gap_s: tuple[float, float] = (0.2, 0.6), admission: dict | None = None) -> None:
         """Idle control, then for each C: start closed-loop /analyze load, confirm
         provider saturation on the *fake* (a separate process, so confirming uses
         no QuoteCheck worker token), wait one further provider period, then issue
@@ -683,9 +731,12 @@ class Run:
                 "ladder_planned": ladder, "ladder_executed": [], "probes_per_point": probes_n,
                 "probe_gap_s_uniform": list(gap_s), "probe_seed": seed,
                 "probe_timeout_s": HEALTH_PROBE_TIMEOUT_S, "seq_warmup_requests": seq_warmup,
-                "saturation_gate": f"fake in_flight >= min(C, {ANYIO_DEFAULT_TOKENS}), "
+                "saturation_gate": f"fake in_flight >= min(C, "
+                                   f"{(admission or {}).get('gate_cap', ANYIO_DEFAULT_TOKENS)}), "
                                    "then one further provider period",
                 "points": [], "stopped_by": None}
+        if admission is not None:
+            meta["admission"] = admission
         try:
             warm, _ = run_load(srv.port, method="POST", path="/analyze",
                                bodies=[body_for(f"warm-seq-{i}") for i in range(seq_warmup)],
@@ -710,7 +761,7 @@ class Run:
                     self.host_guard = self.host_guard or sampler.guard
                     break
                 point = self._health_point(srv, sampler, fake, scenario, latency_s, c,
-                                           probes_n, rng, gap_s, body_for)
+                                           probes_n, rng, gap_s, body_for, admission)
                 meta["points"].append(point)
                 meta["ladder_executed"].append(c)
         finally:
@@ -721,12 +772,17 @@ class Run:
               f"stopped_by={meta['stopped_by']}", flush=True)
 
     def _health_point(self, srv, sampler, fake, scenario, latency_s, c, probes_n, rng,
-                      gap_s, body_for) -> dict:
+                      gap_s, body_for, admission=None) -> dict:
         fake.reset()
         sampler.reset_peaks()
-        target = min(c, ANYIO_DEFAULT_TOKENS)
-        n_load = c * 200  # far more than the probe window needs; stopped via abort
-        bodies = [body_for(f"hl-c{c}-{i}") for i in range(n_load)]
+        adm = admission or {}
+        target = min(c, adm.get("gate_cap", ANYIO_DEFAULT_TOKENS))
+        if admission is None:
+            n_load = c * 200  # far more than the probe window needs; stopped via abort
+            bodies = [body_for(f"hl-c{c}-{i}") for i in range(n_load)]
+        else:
+            # Rejected requests return at once, so the load is bounded only by abort.
+            bodies = LazyBodies(DURATION_BOUND_MAX_REQUESTS, body_for, f"hl-c{c}-")
         abort = threading.Event()
         clock: dict = {}
         box: dict = {}
@@ -735,7 +791,8 @@ class Run:
         def load():
             box["recs"], box["wall"] = run_load(srv.port, method="POST", path="/analyze",
                                                 bodies=bodies, concurrency=c, abort=abort,
-                                                clock_out=clock)
+                                                clock_out=clock,
+                                                reject_backoff_s=adm.get("reject_backoff_s"))
         lt = threading.Thread(target=load, daemon=True)
         lt.start()
         point = {"concurrency": c, "gate_target_in_flight": target}
@@ -779,6 +836,14 @@ class Run:
                 "t0": t0, **r})
         self._record_probes(scenario, c, latency_s, probes, atts, recs, t0)
         peaks = sampler.peaks()
+        rejected = [r for r in recs if r.get("error_code") == CAPACITY_EXCEEDED]
+        if admission is not None:
+            point["load_rejected"] = len(rejected)
+            point["load_successes"] = sum(1 for r in recs if r["success"])
+            point["load_rejection_latency"] = stats.latency_summary(
+                r["duration_s"] for r in rejected)
+            point["load_rejections_with_provider_attempts"] = sum(
+                1 for r in rejected if r.get("fake_attempts"))
         point.update({
             "probes": len(probes), "load_requests": len(recs),
             "load_failures": sum(1 for r in recs if not r["success"]),
@@ -791,7 +856,11 @@ class Run:
         if sampler.guard:
             self.host_guard = sampler.guard
         print(f"    {scenario} C={c}: {self._probe_line(probes)} load_reqs={len(recs)} "
-              f"load_fail={point['load_failures']} thr_peak={peaks['threads']} "
+              f"load_fail={point['load_failures']} "
+              + (f"load_rej={len(rejected)} rej_p95="
+                 f"{point['load_rejection_latency'].get('p95_ms')} "
+                 if admission is not None else "")
+              + f"thr_peak={peaks['threads']} "
               f"prov_peak={point['provider_peak_in_flight']}", flush=True)
         return point
 
@@ -860,26 +929,33 @@ class Run:
         return None
 
     def _point(self, srv, sampler, meta, fake, log_path, c, n, body_for,
-               expected_attempts, join_attempts=False) -> dict:
+               expected_attempts, join_attempts=False, admission=None) -> dict:
         key = {"experiment": meta["experiment"], "scenario": meta["scenario"],
                "workload_id": meta["workload_id"], "concurrency": c}
+        adm = admission or {}
+        backoff = adm.get("reject_backoff_s")
+        duration = adm.get("duration_s")
         # Burst warm-up at the target concurrency (threads/connections spun up).
         run_load(srv.port, method=meta["method"], path=meta["path"],
                  bodies=[body_for(f"warm-c{c}-{i}") for i in range(2 * c)], concurrency=c)
+        if fake is not None and admission is not None:
+            fake.wait_idle(timeout=30)
         pooled, failures = [], 0
-        for trial in range(1, self.trials + 1):
+        for trial in range(1, (adm.get("trials") or self.trials) + 1):
             if fake is not None:
                 fake.reset()
             off = _log_size(log_path)
             sampler.reset_peaks()
             cpu0 = cpu_seconds(srv.pid)
-            bodies = [body_for(f"c{c}-t{trial}-{i}") for i in range(n)]
+            bodies = (LazyBodies(DURATION_BOUND_MAX_REQUESTS, body_for, f"c{c}-t{trial}-")
+                      if duration else [body_for(f"c{c}-t{trial}-{i}") for i in range(n)])
             abort = threading.Event()
             watchdog_halt = threading.Event()
+            wd_t0 = time.monotonic()
 
             def watchdog():
                 while not watchdog_halt.wait(0.1):
-                    if sampler.guard:
+                    if sampler.guard or (duration and time.monotonic() - wd_t0 >= duration):
                         abort.set()
                         return
             wd = threading.Thread(target=watchdog, daemon=True)
@@ -887,7 +963,8 @@ class Run:
             epoch0, mono0 = time.time(), time.monotonic()
             clock: dict = {}
             recs, wall = run_load(srv.port, method=meta["method"], path=meta["path"],
-                                  bodies=bodies, concurrency=c, abort=abort, clock_out=clock)
+                                  bodies=bodies, concurrency=c, abort=abort, clock_out=clock,
+                                  reject_backoff_s=backoff)
             clock_skew_s = (time.time() - epoch0) - (time.monotonic() - mono0)
             watchdog_halt.set()
             cpu1 = cpu_seconds(srv.pid)
@@ -902,6 +979,14 @@ class Run:
                          # monotonic clock but not wall time; such a trial is invalid.
                          "clock_skew_s": round(clock_skew_s, 3),
                          "suspend_suspected": abs(clock_skew_s) > SUSPEND_SKEW_GUARD_S}
+            rejected = [r for r in recs if r.get("error_code") == CAPACITY_EXCEEDED]
+            if admission is not None:
+                trial_rec["rejection_aware"] = True
+                trial_rec["admission_mode"] = adm.get("mode")
+                trial_rec["rejected"] = len(rejected)
+                if duration:
+                    trial_rec["requests_planned"] = None
+                    trial_rec["issue_duration_s"] = duration
             if meta["path"] == "/analyze":
                 logs = _read_log_slice(log_path, off)
                 by_id = {r["request_id"]: r for r in logs}
@@ -919,7 +1004,11 @@ class Run:
                           and pstats["attempts_completed"] == pstats["attempts_started"]
                           and len(logs) == len(recs))
                     if expected_attempts is not None:
-                        ok = ok and log_attempts == expected_attempts * len(recs)
+                        # Rejected requests (SCALE-004) are logged with 0 attempts.
+                        ok = ok and log_attempts == expected_attempts * (len(recs) - len(rejected))
+                    if rejected:
+                        ok = ok and all(by_id.get(r["request_id"], {}).get("provider_attempts")
+                                        == 0 for r in rejected)
                     trial_rec["reconciled"] = ok
                     if not ok:
                         print(f"    WARNING: reconciliation failed {key} trial {trial}: "
@@ -938,11 +1027,15 @@ class Run:
                 self._write(self._req_f, {**key, "trial": trial, **r})
             self._write(self._trial_f, trial_rec)
             pooled.extend(r["duration_s"] for r in recs)
-            failures += sum(1 for r in recs if not r["success"])
+            failures += sum(1 for r in recs if not r["success"]) - len(rejected)
             lat = stats.latency_summary(r["duration_s"] for r in recs)
+            rej_lat = stats.latency_summary(r["duration_s"] for r in rejected)
             print(f"    {meta['scenario']} C={c} trial={trial} n={len(recs)} "
                   f"fail={sum(1 for r in recs if not r['success'])} wall={wall:.2f}s "
-                  f"rps={len(recs) / wall if wall else 0:.1f} p50={lat.get('p50_ms')} "
+                  + (f"rej={len(rejected)} rej_p95={rej_lat.get('p95_ms')} "
+                     f"ok_rps={sum(1 for r in recs if r['success']) / wall if wall else 0:.2f} "
+                     if admission is not None else "")
+                  + f"rps={len(recs) / wall if wall else 0:.1f} p50={lat.get('p50_ms')} "
                   f"p95={lat.get('p95_ms')} thr_peak={peaks['threads']}"
                   + (f" prov_peak={trial_rec['provider']['peak_in_flight']}"
                      f" att={trial_rec['provider']['attempts_started']}"
@@ -968,7 +1061,14 @@ def plan(quick: bool) -> dict:
                 "sat_latencies": {"lat100ms": (0.1, [1, 4])},
                 "health_latencies": {"lat200ms": 0.2}, "health_ladder": [2, 4],
                 "health_probes": 5, "retry_sat_latency": 0.1, "retry_sat_points": [2, 4],
-                "retry_sat_fail_always_c": 4, "retry_sat_fail_always_n": 8}
+                "retry_sat_fail_always_c": 4, "retry_sat_fail_always_n": 8,
+                # SCALE-004
+                "adm_burst_latencies": {"lat300ms": 0.3}, "adm_ladder": [4, 40],
+                "adm_burst_trials": 2, "adm_sustained_latency": 0.3,
+                "adm_duration_periods": 4, "adm_sustained_trials": 1,
+                "adm_backoff_s": 0.25, "adm_worst_c": 40,
+                "adm_health_latencies": {"lat300ms": 0.3}, "adm_retry_latency": 0.3,
+                "adm_retry_c": 40}
     return {"demo_ladder": [1, 2, 4, 8, 16, 32, 64], "demo_n": 200,
             "demo_workloads": list(WORKLOADS),
             "fake_ladder": [1, 2, 4, 8, 16, 32, 48, 64],
@@ -982,7 +1082,14 @@ def plan(quick: bool) -> dict:
                               "lat5s": (5.0, [16, 32, 40, 48, 64])},
             "health_latencies": {"lat3s": 3.0, "lat5s": 5.0}, "health_ladder": [32, 40, 64],
             "health_probes": 40, "retry_sat_latency": 3.0, "retry_sat_points": [32, 40, 64],
-            "retry_sat_fail_always_c": 64, "retry_sat_fail_always_n": 128}
+            "retry_sat_fail_always_c": 64, "retry_sat_fail_always_n": 128,
+            # SCALE-004
+            "adm_burst_latencies": {"lat3s": 3.0, "lat5s": 5.0}, "adm_ladder": [32, 40, 64],
+            "adm_burst_trials": 5, "adm_sustained_latency": 5.0,
+            "adm_duration_periods": 4, "adm_sustained_trials": 3,
+            "adm_backoff_s": 0.25, "adm_worst_c": 64,
+            "adm_health_latencies": {"lat3s": 3.0, "lat5s": 5.0}, "adm_retry_latency": 3.0,
+            "adm_retry_c": 64}
 
 
 def run_demo(run: Run, p: dict) -> None:
@@ -1074,17 +1181,86 @@ def run_retry_sat(run: Run, p: dict, fake: FakeProviderProcess, run_id: str) -> 
                  expect_failures=True, join_attempts=True)
 
 
+def run_admission(run: Run, p: dict, fake: FakeProviderProcess, run_id: str,
+                  gate_cap: int) -> None:
+    """SCALE-004 focused before/after set. Identical workload against either
+    backend; only ``gate_cap`` (the provider in-flight level the health gate
+    waits for) differs, because an admitted budget below 40 caps it lower.
+
+    burst      one simultaneous wave of C requests (N = C), 3 s and 5 s
+    sustained  closed loop for ``adm_duration_periods`` provider periods at 5 s,
+               rejected clients resend after ``adm_backoff_s``; plus the
+               worst case at C = ``adm_worst_c`` with zero backoff
+    health     /health probes during sustained load (backoff and zero backoff)
+    retry      fail-first burst and sustained, fail-always sustained, at 3 s
+    """
+    back = p["adm_backoff_s"]
+    periods = p["adm_duration_periods"]
+    for name, lat in p["adm_burst_latencies"].items():
+        scen = f"adm_burst_{name}"
+        run.scenario(experiment="admission", scenario=scen, workload_id="normal",
+                     method="POST", path="/analyze", ladder=p["adm_ladder"],
+                     n_for=lambda c: c, body_for=_marked(run_id, scen), use_openai=True,
+                     fake=fake, fake_cfg={"latency_s": lat, "mode": "success"},
+                     seq_warmup=p["seq_warmup_fake"], expected_attempts_per_request=1,
+                     join_attempts=True,
+                     admission={"mode": "burst", "trials": p["adm_burst_trials"]})
+    lat = p["adm_sustained_latency"]
+    for scen, ladder, backoff in (
+            (f"adm_sustained_{int(lat * 1000)}ms", p["adm_ladder"], back),
+            (f"adm_sustained_{int(lat * 1000)}ms_nobackoff", [p["adm_worst_c"]], 0.0)):
+        run.scenario(experiment="admission", scenario=scen, workload_id="normal",
+                     method="POST", path="/analyze", ladder=ladder, n_for=lambda c: None,
+                     body_for=_marked(run_id, scen), use_openai=True, fake=fake,
+                     fake_cfg={"latency_s": lat, "mode": "success"},
+                     seq_warmup=p["seq_warmup_fake"], expected_attempts_per_request=1,
+                     join_attempts=True,
+                     admission={"mode": "sustained", "trials": p["adm_sustained_trials"],
+                                "duration_s": periods * lat, "reject_backoff_s": backoff})
+    for i, (name, hlat) in enumerate(p["adm_health_latencies"].items()):
+        scen = f"adm_health_{name}"
+        run.health(scenario=scen, latency_s=hlat, ladder=p["adm_ladder"],
+                   probes_n=p["health_probes"], fake=fake, body_for=_marked(run_id, scen),
+                   seq_warmup=p["seq_warmup_fake"], seed=4004 + i,
+                   admission={"gate_cap": gate_cap, "reject_backoff_s": back})
+    hlat = max(p["adm_health_latencies"].values())
+    scen = f"adm_health_{int(hlat * 1000)}ms_nobackoff"
+    run.health(scenario=scen, latency_s=hlat, ladder=[p["adm_worst_c"]],
+               probes_n=p["health_probes"], fake=fake, body_for=_marked(run_id, scen),
+               seq_warmup=p["seq_warmup_fake"], seed=4104,
+               admission={"gate_cap": gate_cap, "reject_backoff_s": 0.0})
+    rlat, rc = p["adm_retry_latency"], p["adm_retry_c"]
+    ms = int(rlat * 1000)
+    for scen, mode, adm, expect_fail in (
+            (f"adm_retry_fail_first_burst_{ms}ms", "fail_first",
+             {"mode": "burst", "trials": p["adm_burst_trials"]}, False),
+            (f"adm_retry_fail_first_sustained_{ms}ms", "fail_first",
+             {"mode": "sustained", "trials": p["adm_sustained_trials"],
+              "duration_s": periods * rlat, "reject_backoff_s": back}, False),
+            (f"adm_retry_fail_always_sustained_{ms}ms", "fail_always",
+             {"mode": "sustained", "trials": p["adm_sustained_trials"],
+              "duration_s": periods * rlat, "reject_backoff_s": back}, True)):
+        run.scenario(experiment="admission", scenario=scen, workload_id="normal",
+                     method="POST", path="/analyze", ladder=[rc],
+                     n_for=lambda c: c, body_for=_marked(run_id, scen), use_openai=True,
+                     fake=fake, fake_cfg={"latency_s": rlat, "mode": mode},
+                     seq_warmup=p["seq_warmup_fake"], expected_attempts_per_request=2,
+                     expect_failures=expect_fail, join_attempts=True, admission=adm)
+
+
 SCALE003_EXPERIMENTS = ("saturation", "health", "retry_sat")
 _SCALE003_PLAN_KEYS = {"sat_latencies", "health_latencies", "health_ladder", "health_probes",
                        "retry_sat_latency", "retry_sat_points", "retry_sat_fail_always_c",
                        "retry_sat_fail_always_n"}
+_SCALE004_PLAN_KEYS = {k for k in plan(False) if k.startswith("adm_")}
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     ap = argparse.ArgumentParser(description="SCALE-001 capacity characterization (local only)")
     ap.add_argument("--experiment",
-                    choices=("demo", "fake", "retry", "all", *SCALE003_EXPERIMENTS),
+                    choices=("demo", "fake", "retry", "all", *SCALE003_EXPERIMENTS,
+                             "admission"),
                     nargs="+", default=["all"],
                     help="'all' = demo fake retry (SCALE-001 set); SCALE-003 experiments "
                          "must be named explicitly")
@@ -1093,6 +1269,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="ticket this measurement is for, recorded in env.json (metadata only)")
     ap.add_argument("--trials", type=int, default=None, help="default 3 (1 with --quick)")
     ap.add_argument("--quick", action="store_true", help="tiny smoke run, not evidence")
+    ap.add_argument("--gate-cap", type=int, default=ANYIO_DEFAULT_TOKENS,
+                    help="admission experiment only: provider in-flight level the health "
+                         "saturation gate waits for (min(C, cap)); 40 = the anyio default "
+                         "limiter, use the admission budget for a build that enforces one")
     args = ap.parse_args(argv)
 
     exps = set(args.experiment) - {"all"}
@@ -1115,8 +1295,11 @@ def main(argv: list[str] | None = None) -> int:
                      # SCALE-003 plan keys are recorded only for runs that use them,
                      # so a SCALE-001-style run's env.json plan is unchanged.
                      "plan": {k: v for k, v in p.items() if not callable(v) and (
-                         k not in _SCALE003_PLAN_KEYS or exps & set(SCALE003_EXPERIMENTS))},
+                         k not in _SCALE003_PLAN_KEYS or exps & set(SCALE003_EXPERIMENTS))
+                         and (k not in _SCALE004_PLAN_KEYS or "admission" in exps)},
                      "fake_n_rule": "max(2*C, 4)" if args.quick else "max(4*C, 16)"})
+    if "admission" in exps:
+        env_meta["admission_gate_cap"] = args.gate_cap
     run = Run(run_dir, trials)
     fake = None
     t_start = time.monotonic()
@@ -1124,8 +1307,8 @@ def main(argv: list[str] | None = None) -> int:
         if "demo" in exps:
             print("== Experiment A: Demo via real localhost HTTP", flush=True)
             run_demo(run, p)
-        if exps & {"fake", "retry", *SCALE003_EXPERIMENTS}:
-            if exps & set(SCALE003_EXPERIMENTS) and not clocks_shared():
+        if exps & {"fake", "retry", *SCALE003_EXPERIMENTS, "admission"}:
+            if exps & {*SCALE003_EXPERIMENTS, "admission"} and not clocks_shared():
                 raise RuntimeError("fail-closed: perf_counter and monotonic are not one "
                                    "shared CLOCK_MONOTONIC; attempt timelines can't be joined")
             fake = FakeProviderProcess(run.server_dir / "fake_provider.log")
@@ -1145,6 +1328,9 @@ def main(argv: list[str] | None = None) -> int:
             if "retry_sat" in exps:
                 print("== SCALE-003 C: retry under saturation", flush=True)
                 run_retry_sat(run, p, fake, run_dir.name)
+            if "admission" in exps:
+                print("== SCALE-004: provider admission before/after set", flush=True)
+                run_admission(run, p, fake, run_dir.name, args.gate_cap)
     finally:
         if fake is not None:
             fake.stop()

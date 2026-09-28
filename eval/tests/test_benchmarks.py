@@ -30,6 +30,7 @@ from benchmarks.fake_provider import FakeProviderServer, FakeProviderState
 from benchmarks.run_capacity import (
     SENTINEL_API_KEY,
     SENTINEL_MODEL,
+    LazyBodies,
     assert_loopback_url,
     build_child_env,
     clocks_shared,
@@ -431,6 +432,57 @@ class TimelineStatsTests(unittest.TestCase):
                    "post_provider_s": 0.1}]
         row = stats.summarize(phased, trials)[0]
         self.assertEqual(row["phase_latency"]["pre_provider"]["p50_ms"], 100.0)
+
+
+class AdmissionStatsTests(unittest.TestCase):
+    """SCALE-004: rejection-aware summary fields, absent for older raw records."""
+
+    KEY = {"experiment": "admission", "scenario": "s", "workload_id": "w", "concurrency": 3}
+
+    def _reqs(self):
+        return [
+            {**self.KEY, "trial": 1, "duration_s": 3.0, "success": True, "http_status": 200,
+             "error_code": None, "provider_attempts": 1, "fake_attempts": 1},
+            {**self.KEY, "trial": 1, "duration_s": 0.004, "success": False,
+             "http_status": 503, "error_code": "capacity_exceeded", "provider_attempts": 0},
+            {**self.KEY, "trial": 1, "duration_s": 6.0, "success": False, "http_status": 503,
+             "error_code": "provider_unavailable", "provider_attempts": 2, "fake_attempts": 2},
+        ]
+
+    def test_admission_block_separates_rejections_from_failures(self):
+        trials = [{**self.KEY, "trial": 1, "wall_s": 6.0, "requests_planned": 3,
+                   "rejection_aware": True, "rejected": 1,
+                   "rejections_done_before_first_provider_end": True}]
+        row = stats.summarize(self._reqs(), trials)[0]
+        adm = row["admission"]
+        self.assertEqual(adm["rejected"], 1)
+        self.assertEqual(adm["admitted"], 2)
+        self.assertEqual(adm["non_rejection_failures"], 1)
+        self.assertEqual(adm["failure_code_counts"],
+                         {"capacity_exceeded": 1, "provider_unavailable": 1})
+        self.assertEqual(adm["rejection_http_status_counts"], {"503": 1})
+        self.assertEqual(adm["rejected_with_provider_attempts"], 0)
+        self.assertEqual(adm["rejection_latency"]["max_ms"], 4.0)
+        self.assertEqual(adm["success_latency"]["n"], 1)
+        self.assertIs(adm["all_rejections_done_before_first_provider_end"], True)
+        self.assertEqual(row["per_trial"][0]["rejected"], 1)
+        # Existing fields keep their meaning: every non-200 is still a failure.
+        self.assertEqual(row["failures"], 2)
+
+    def test_admission_fields_absent_without_rejection_aware_trials(self):
+        trials = [{**self.KEY, "trial": 1, "wall_s": 6.0, "requests_planned": 3}]
+        row = stats.summarize(self._reqs(), trials)[0]
+        self.assertNotIn("admission", row)
+        self.assertNotIn("rejected", row["per_trial"][0])
+
+    def test_lazy_bodies_builds_on_demand(self):
+        seen = []
+        bodies = LazyBodies(3, lambda tag: seen.append(tag) or tag.encode(), "p-")
+        self.assertEqual(len(bodies), 3)
+        self.assertEqual(bodies[2], b"p-2")
+        self.assertEqual(seen, ["p-2"])
+        with self.assertRaises(IndexError):
+            bodies[3]
 
 
 if __name__ == "__main__":

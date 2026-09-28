@@ -67,10 +67,11 @@ or httptools, even though a local environment may have them.
 | --- | --- |
 | `workloads.py` | The fixed `short` / `normal` / `near_max` quote texts, with their sha256 hashes recorded in results |
 | `fake_provider.py` | Loopback fake of `POST /v1/responses`: deterministic latency, lock-guarded attempt and in-flight counters, `success` / `fail_first` / `fail_always` modes, `TCP_NODELAY` on accepted sockets, per-attempt monotonic timestamp log (SCALE-003) |
-| `run_capacity.py` | Orchestration: env metadata, server lifecycle, closed-loop load client, `/proc` sampling, guards, reconciliation; SCALE-003 attempt join and `/health` probe runner |
-| `stats.py` | Nearest-rank percentiles and per-point summaries, recomputable from raw files; SCALE-003 timeline helpers and health summary |
+| `run_capacity.py` | Orchestration: env metadata, server lifecycle, closed-loop load client, `/proc` sampling, guards, reconciliation; SCALE-003 attempt join and `/health` probe runner; SCALE-004 rejection-aware `admission` experiment |
+| `stats.py` | Nearest-rank percentiles and per-point summaries, recomputable from raw files; SCALE-003 timeline helpers and health summary; SCALE-004 admission block |
 | `diag_client_construction.py` | SCALE-001 diagnostic: cost of per-request `OpenAI(...)` construction |
 | `diag_keepalive.py` | SCALE-003 diagnostic: reused-connection latency with and without the fake's `TCP_NODELAY` |
+| `diag_rejection_log.py` | SCALE-004 diagnostic: in-process event-loop cost of an admission rejection with/without its synchronous JSONL log, and of `response_model` validation |
 
 ## Output layout (`benchmarks/results/<run-id>/`)
 
@@ -79,13 +80,35 @@ or httptools, even though a local environment may have them.
 | `env.json` | git commit and dirty flag, Python, OS/kernel/WSL, CPU, memory, package versions, server argv, plan, guards |
 | `scenarios.jsonl` | One line per scenario: server argv, env overrides (no secrets), ladder planned and executed, stop reason |
 | `trials.jsonl` | One line per measured trial: wall time, server CPU seconds, peak threads/RSS/fds, fake-provider counters, reconciliation, clock-skew (suspend) check |
-| `requests.jsonl` | One line per measured request: timings, HTTP status, error code, request id, server-logged latency, provider attempts |
+| `requests.jsonl` | One line per measured request: timings, HTTP status, error code, request id, server-logged latency, provider attempts (generated bulk; not committed since SCALE-004, see "Evidence retention") |
 | `summary.json` | Per-point aggregates (`python -m benchmarks.stats` regenerates it) |
-| `server/` | Per-scenario uvicorn stdout and QuoteCheck app run logs (diagnostic) |
+| `server/` | Per-scenario uvicorn stdout and QuoteCheck app run logs (diagnostic; generated bulk, not committed since SCALE-004) |
 
 Warm-up requests (sequential ones at server start, plus a burst of 2×C per
 concurrency point) are never written to `requests.jsonl`. Quote text and
 secrets are not stored in results.
+
+## Evidence retention
+
+The harness plus the fixed workload definitions are the primary reproducibility
+mechanism: a fresh clone reproduces an experiment by rerunning it.
+
+- **Committed:** compact summaries, provenance, trial records and decision-critical
+  diagnostics — `env.json`, `scenarios.jsonl`, `trials.jsonl`, `summary.json`,
+  `health_summary.json`, `health_probes.jsonl`, `provider_attempts.jsonl`,
+  `run_console.log`, and any report scripts/outputs or diagnostics a report cites.
+- **Not committed by default:** generated request-level traces and server logs —
+  `requests.jsonl`, `health_load_requests.jsonl` and `server/`. `.gitignore`
+  excludes them under `benchmarks/results/*/`.
+- **Exact replay:** `python -m benchmarks.stats <run> --check` and report scripts
+  read the request-level files. Where exact replay matters, keep the full raw
+  evidence outside Git and commit a manifest of the omitted files' sha256 hashes and
+  sizes (for example `results/SCALE-004_RAW_EVIDENCE_MANIFEST.txt`). Any `--check`
+  result recorded in a report is then a verification made before compaction.
+- Git LFS is not used.
+- SCALE-001–003 predate this policy; their raw files remain committed and
+  `--check` still runs on them from a fresh clone. SCALE-004's bulk was omitted
+  before publication (see `docs/scalability/SCALE-004_ADMISSION.md`).
 
 ## Method notes
 
@@ -170,3 +193,59 @@ experiments must be named explicitly.
     pooled into `summary.json`);
   - `health_summary.json`.
 - `python -m benchmarks.stats <run> --check` also verifies `health_summary.json`.
+
+## SCALE-004 experiment (provider admission, before/after)
+
+```bash
+# after: the working tree, which enforces a 32-slot provider admission budget
+python -m benchmarks.run_capacity --experiment admission --gate-cap 32 \
+    --run-id SCALE-004-after --ticket SCALE-004              # about 25–30 minutes
+# before: the same harness files run from a checkout of the pre-SCALE-004 backend
+python -m benchmarks.run_capacity --experiment admission --gate-cap 40 \
+    --run-id SCALE-004-before --ticket SCALE-004
+python -m benchmarks.run_capacity --quick --experiment admission --gate-cap 32   # smoke
+```
+
+The workload is the same for both builds. `--gate-cap` is the only difference: the
+health gate waits for provider in-flight ≥ min(C, cap). An enforced budget of 32
+can never reach the 40 that the old gate waited for.
+
+| scenario | what it runs |
+| --- | --- |
+| `adm_burst_lat3s` / `adm_burst_lat5s` | one simultaneous wave of N = C requests, C = 32, 40, 64, 5 trials |
+| `adm_sustained_5000ms` | closed loop at 5 s for 4 provider periods (20 s, duration-bounded), C = 32, 40, 64, 3 trials. A client whose request was rejected waits 0.25 s before resending. |
+| `adm_sustained_5000ms_nobackoff` | the same at C = 64, but a rejected client resends immediately. This is the worst case for the event loop, including synchronous rejection logging. |
+| `adm_health_lat3s` / `adm_health_lat5s` | the SCALE-003 health design at C = 32, 40, 64, with the load resending after rejection with a 0.25 s backoff |
+| `adm_health_5000ms_nobackoff` | health at 5 s, C = 64, zero-backoff load |
+| `adm_retry_*` | 3 s, C = 64: fail-first as a burst (5 trials) and sustained (12 s); fail-always sustained |
+
+**Rejection-aware accounting.** This applies only to trials marked `rejection_aware`,
+so older result directories recompute unchanged.
+
+- A `capacity_exceeded` response is an **admission rejection**. It is not counted as
+  an escalation failure.
+- Reconciliation expects:
+  - `expected_attempts × admitted` provider attempts;
+  - `provider_attempts == 0` in QuoteCheck's log for every rejected request.
+- The attempt join additionally requires that the fake saw **no** attempt carrying a
+  rejected request's marker.
+- `summary.json` rows gain an `admission` block with:
+  - rejected / admitted / non-rejection-failure counts;
+  - failure codes;
+  - rejection and success latency;
+  - for bursts, whether every rejection completed before the first admitted provider
+    attempt ended (`all_rejections_done_before_first_provider_end`).
+- Health points in `scenarios.jsonl` gain `load_rejected`, `load_successes` and
+  `load_rejection_latency`.
+
+**Against a SCALE-004 build**, the SCALE-003 `saturation` / `retry_sat` experiments
+now see `capacity_exceeded` rejections at C > 32. Those are rejection-aware in
+reconciliation and in the join, but they are not summarized separately. The SCALE-003
+`health` experiment gates on in-flight ≥ min(C, 40), which a 32-slot build never
+reaches, so its C ≥ 40 points report `gate_failed`. Use `--experiment admission`
+for such builds.
+
+Duration-bounded points build request bodies lazily (`LazyBodies`) and record
+`issue_duration_s` instead of `requests_planned`. Throughput is still
+successes / trial wall time, where the wall time includes draining in-flight work
+after issuing stops.

@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-28 (SCALE-003)
+Last updated: 2026-09-28 (SCALE-004)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -21,6 +21,23 @@ JSONL log record per request.
   (500). A `RequestValidationError` handler (QC-2A) renders oversized/empty/malformed
   requests in the same body shape with `"code": "invalid_request"` (HTTP 422) — not a
   new `FailureCategory`.
+  SCALE-004: `POST /analyze` is an `async def` wrapper around the unchanged
+  synchronous analysis body (`_analyze_sync`, run via `run_in_threadpool`). In
+  OpenAI mode it takes a provider-admission slot on the event loop **before**
+  threadpool dispatch; when none is free it immediately returns `capacity_exceeded`
+  (503, `retryable: true`) with zero provider calls and one log record
+  (`provider_attempts: 0`). The slot is released once the admitted work's worker
+  thread has returned (retry included); the admitted work runs in its own task behind
+  `asyncio.shield`, so a cancelled request still holds its slot until its provider
+  call ends. Demo mode takes no slot. Because the endpoint is async, FastAPI's
+  `response_model` validation now runs on the event loop, and the `QuoteCheckError`
+  handler is `async` — neither takes a worker token any more. `GET /health` and the
+  `RequestValidationError` handler remain sync (one worker token each).
+- `backend/core/admission.py` — SCALE-004 `ProviderAdmission`: a lock-protected,
+  non-blocking slot counter (`try_acquire()` / `release()`, underflow raises) and the
+  process-wide instance `provider_admission` (capacity
+  `OPENAI_MAX_CONCURRENT_ANALYSES`), built eagerly at import. Per process: N server
+  processes would each have their own budget. No queue, no waiting.
 - `backend/core/schema.py` — Pydantic contract (`AnalyzeRequest`, `QuoteCheckResult`
   and nested models: line items, risk levels, uncertainty markers, refusals, metadata).
   `AnalyzeRequest.quote_text` is bounded `1..MAX_QUOTE_TEXT_CHARS` (QC-2A; 12,000
@@ -50,8 +67,9 @@ JSONL log record per request.
   raised as a single `QuoteCheckError` (`backend/core/errors.py`); a raw SDK
   exception never escapes the module. There is no repair loop and no fallback to
   Demo output. Returns `(result, latency_ms, provider_attempts)`.
-- `backend/core/errors.py` — the QC-4 reliability model: `FailureCategory` (8
-  values), a category→(http_status, retryable, user_message) spec table, the
+- `backend/core/errors.py` — the QC-4 reliability model: `FailureCategory` (9
+  values since SCALE-004 added the application-owned `capacity_exceeded`: 503,
+  retryable, distinct from the `provider_*` categories), a category→(http_status, retryable, user_message) spec table, the
   `QuoteCheckError` exception (carries `cause` for tests but only ever logs
   `cause_type`), `classify_openai_exception`, `is_transient_openai_exception`, and
   `error_response_body`. One module, no hierarchy.
@@ -77,7 +95,11 @@ JSONL log record per request.
   an explicitly-set-but-empty value all raise at import; unset → the local Vite dev
   server on both hostnames), and fixed code constants `DEMO_ANALYZER_MODEL`,
   `OPENAI_MAX_RETRIES = 1`, `OPENAI_MAX_ATTEMPTS = 2` (retry count is deliberately not
-  env-overridable — it affects cost and request amplification). `OPENAI_API_KEY` is
+  env-overridable — it affects cost and request amplification), and (SCALE-004)
+  `OPENAI_MAX_CONCURRENT_ANALYSES = 32` — the per-process provider admission budget,
+  also deliberately not env-overridable, kept below anyio's 40-token default worker
+  limiter (test-enforced). 32 is a local measurement point, not an OpenAI/host
+  capacity claim. `OPENAI_API_KEY` is
   read but never validated at startup — Demo mode starts and serves with the key
   absent; it is required only when the OpenAI path actually executes. Loaded from
   untracked `backend/.env` (template: `backend/.env.example`); if `backend/.env`
@@ -313,6 +335,58 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Changed in SCALE-004
+
+**First deliberate overload/runtime change.** The report and Decision Gate D are in
+`docs/scalability/SCALE-004_ADMISSION.md`. Raw before/after evidence is in
+`benchmarks/results/SCALE-004-{before,after}/`. Local, fake provider, ₹0.
+
+- **Provider admission.** OpenAI-mode `/analyze` is bounded to
+  `OPENAI_MAX_CONCURRENT_ANALYSES = 32` admitted requests **per process**.
+  - The decision is made on the event loop, before threadpool dispatch.
+  - Excess requests get an immediate `capacity_exceeded`: 503, `retryable: true`,
+    zero provider calls, and one JSONL record with `provider_attempts: 0`.
+  - A retry stays inside its request's slot.
+  - Demo mode is unaffected and takes no slot.
+- **Execution shape.** This is coupled to admission:
+  - `/analyze` is an `async def` wrapper around the unchanged synchronous body;
+  - `response_model` validation runs on the event loop;
+  - the `QuoteCheckError` handler is `async`.
+
+  Neither of those takes a worker token any more. `/health` and the 422 handler are
+  unchanged (sync).
+- **Contract change (approved).** `FailureCategory` gains `capacity_exceeded`
+  (application-owned, distinct from `provider_*`). All other categories, retry
+  semantics, `QuoteCheckResult`, the body shape and the frontend are unchanged. The
+  frontend renders the new code generically.
+- **Eval runner.** `eval/run_eval.py` calls the route function directly. It now runs
+  the async route to completion per case (`sync_route_adapter`). Demo eval is
+  unchanged: 27/27 schema-valid and 24/27 passing.
+- **Measured locally, before vs after, same harness:**
+  - Peak provider in-flight is 32 everywhere, including retries.
+  - Excess demand is rejected in about 1.5 ms p50 (sustained) or ≤ 181 ms p95
+    (simultaneous bursts), instead of waiting up to a full provider period.
+  - `/health` p95 under C = 40/64 overload falls from 2.2–4.7 s to 3.5–28 ms.
+  - Admitted p95 at 5 s / C=64 falls from 10.4 s to 5.3 s.
+  - The price is about 20% lower peak completed throughput under saturation
+    (32 / latency instead of 40 / latency).
+  - A zero-backoff rejection storm (~2k/s) saturates the single event loop, giving
+    `/health` p95 155 ms.
+- **Tooling:**
+  - `benchmarks/run_capacity.py --experiment admission [--gate-cap N]`, with
+    rejection-aware reconciliation and join;
+  - an `admission` block in `stats.py` summaries (only for rejection-aware trials,
+    so historical `--check` is unchanged);
+  - `benchmarks/diag_rejection_log.py`.
+- **Tests:** 201 in the suite (was 183):
+  - 13 in `eval/tests/test_provider_admission.py`;
+  - 3 harness tests;
+  - 2 eval-adapter tests;
+  - one new `_ROUTE_CASES` row.
+- **Still not implemented:** public or per-client rate limiting, cross-process
+  coordination, a configurable budget, and admission metrics beyond the JSONL
+  record.
 
 ### Changed in SCALE-003
 
