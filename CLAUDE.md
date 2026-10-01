@@ -333,7 +333,7 @@ Since SCALE-004, `POST /analyze` is a thin `async def` admission wrapper around 
 
 Do not assume this architecture is inadequate.
 
-Its practical concurrency and capacity limits are a v1 measurement question.
+Its practical local concurrency and capacity limits were measured in SCALE-001–004. The consolidated v1 story, final contract, local envelope and accepted limitations are in `docs/scalability/SCALE-006_V1_CLOSURE.md`. Any change to them needs new measurement.
 
 The analyzer is selected by configuration:
 
@@ -456,7 +456,7 @@ From repository root with backend requirements installed:
 python -m unittest discover -s eval/tests -p 'test_*.py' -v
 ```
 
-The v0 public-inspection baseline ran **144 tests successfully**.
+The v0 public-inspection baseline ran **144 tests successfully**. The SCALE-006 v1 closure ran **201**.
 
 Do not assume that number remains fixed after future tickets. Report the number actually executed.
 
