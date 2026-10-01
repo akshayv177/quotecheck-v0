@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-10-01 (SCALE-005)
+Last updated: 2026-10-01 (SCALE-006)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -306,8 +306,7 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   was not taken. Still open: no public rate limiting / quota control, and no durable
   or centralized logging (hosted run logs are local and ephemeral). OpenAI mode
   remains an optional repository capability — not the path observed in the public
-  deployment and not exposed anonymously. QC-5 (final public inspection) is the next
-  task.
+  deployment and not exposed anonymously.
 - No semantic repair when model output fails schema validation: it is reported as
   `invalid_model_output` and never patched or re-requested (deliberate — QC-4). No
   bounded repair-retry either.
@@ -339,6 +338,41 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Changed in SCALE-006
+
+**v1 closure: verification and documentation only.** No `backend/`, `frontend/`,
+`eval/`, `benchmarks/`, dependency or deployment change. ₹0.
+
+- **Closure document.** `docs/scalability/SCALE-006_V1_CLOSURE.md` contains:
+  - the SCALE-001–005 story;
+  - the final runtime contract and cost boundary;
+  - the local operating envelope;
+  - every accepted limitation with its revisit trigger;
+  - Decision Gate F: **passed**.
+- **Final regression at `0e039ca`.** The results:
+  - 201 unit tests OK;
+  - corpus validation 27 cases, 0 errors;
+  - Demo eval 27/27 schema-valid and 24/27, with residuals `AUTO-004`, `CONT-003` and
+    `HVAC-003`;
+  - frontend lint and build clean;
+  - a local Demo `/health` and `/analyze` smoke.
+- **Admission smoke.** `run_capacity --quick --experiment admission --gate-cap 32` ran
+  on a clean tree at `0e039ca`, with its run directory outside the repository and
+  nothing committed. Results:
+  - peak provider in-flight 32;
+  - every rejection 503 `capacity_exceeded` with zero provider calls;
+  - 2.0 attempts per admitted request under retry;
+  - every trial reconciled.
+
+  This binds the SCALE-004 admission contract to the exact closed code by commit
+  (`git_dirty: false`), instead of by attestation.
+- **Public truth sync.**
+  - `PROJECT_STATUS.md`: the test count, plus capacity, overload and cost-boundary
+    statements.
+  - `README.md`: nine failure categories (was "eight"), the reliability test counts,
+    and a "Capacity and overload" section.
+- **Merge to `main`, tag and release** await explicit user approval.
 
 ### Changed in SCALE-005
 
