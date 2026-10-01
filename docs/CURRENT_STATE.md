@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-28 (SCALE-004)
+Last updated: 2026-10-01 (SCALE-005)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -111,7 +111,11 @@ JSONL log record per request.
   `provider_status`, `provider_request_id`, `response_status`, `incomplete_reason`,
   `provider_attempts` (the actual number of provider calls made). `error` is a
   short application-authored string — never a raw exception dump, traceback, request
-  body, or API key.
+  body, or API key. `latency_ms` measures a different interval on each path (see
+  `docs/scalability/SCALE-005_RUNTIME_CONTRACT.md` §6.2). On OpenAI success it is
+  provider-loop time only. On failure it is `_analyze_sync` time. On a rejection it
+  is entry-to-log time. On Demo success it is ≈ 0 (taken before the stub runs). No
+  token usage is logged.
 - `backend/core/schema_export.py` — JSON Schema export used by the OpenAI analyzer.
 - `frontend/src/App.jsx` — entire UI: textarea → Analyze → quote-understanding
   report (report header with a derived risk-count strip, summary card, then one
@@ -335,6 +339,33 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   "needs clarification" item.
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
+
+### Changed in SCALE-005
+
+**Documentation and runtime contract only.** No `backend/`, `frontend/`, `eval/`,
+`benchmarks/`, dependency or deployment change. No new benchmark run. ₹0.
+
+- **v1 runtime contract.** `docs/scalability/SCALE-005_RUNTIME_CONTRACT.md` freezes it:
+  - 15 claims, each mapped to its source and an existing enforcing test or accepted
+    evidence;
+  - overload and failure semantics;
+  - the local operating envelope (SCALE-004 evidence only; not an SLA);
+  - an operator guide with JSONL commands validated against the retained SCALE-004
+    logs;
+  - a decision register (14 candidates, none required for v1 closure);
+  - Decision Gate E: **passed**.
+- **Cost claim sharpened.** QuoteCheck bounds concurrent provider work (≤ 32 per
+  process) and per-request amplification (≤ 2 attempts), and makes zero provider
+  calls for rejected, invalid and Demo requests. **Cumulative provider spend is not
+  bounded by the application.** In v1 it is bounded externally: the public
+  deployment runs Demo, OpenAI mode is opt-in and not publicly exposed, and
+  provider-account controls apply. There is no `max_output_tokens` cap and no token
+  or cost logging. Both are deferred to the first approved paid-provider exercise, or
+  to before any public OpenAI exposure.
+- **Still not implemented** (deliberately deferred or not justified; see the contract
+  §7): public/per-client rate limiting, `Retry-After`, a configurable budget,
+  admission metrics, token/cost logging, queueing, more workers or replicas,
+  cross-process coordination, an async OpenAI path.
 
 ### Changed in SCALE-004
 

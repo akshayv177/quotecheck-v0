@@ -377,6 +377,8 @@ Demo mode bypasses provider admission.
 
 The admission budget is per process. Multiple Uvicorn processes or replicas multiply aggregate provider capacity; there is no cross-process coordination. 32 is a locally measured v1 budget, not a claim about real OpenAI or Railway capacity.
 
+The v1 runtime contract, local operating envelope and cost boundary are in `docs/scalability/SCALE-005_RUNTIME_CONTRACT.md`. QuoteCheck bounds concurrent provider work and per-request provider amplification. It does **not** bound cumulative provider spend over time; that rests on exposure policy (public v1 runs Demo) and external provider-account controls. There is no `max_output_tokens` cap and no token/cost logging. Both are deferred until the first approved paid-provider exercise or before any public OpenAI exposure.
+
 There is no silent fallback from OpenAI mode to Demo mode.
 
 Current run observability is append-only local JSONL.
