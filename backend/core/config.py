@@ -119,6 +119,17 @@ OPENAI_MAX_RETRIES = 1
 # Maximum provider calls for a single /analyze request: 1 initial + the retries.
 OPENAI_MAX_ATTEMPTS = 1 + OPENAI_MAX_RETRIES
 
+# --- Provider admission (SCALE-004) ------------------------------------------ #
+# Maximum OpenAI-mode /analyze requests admitted at once, PER PROCESS; excess
+# requests are rejected immediately as capacity_exceeded (no provider call, no
+# waiting). One admitted request holds one slot across its whole provider
+# attempt sequence, including the retry. N server processes => N x this value.
+# Fixed code constant, deliberately NOT environment-overridable: 32 is the
+# SCALE-003 local measurement point that left /health unaffected and kept 8 of
+# anyio's 40 default worker tokens outside provider-bound work. It must stay
+# below that limiter (a test enforces this). It is not an OpenAI/host capacity claim.
+OPENAI_MAX_CONCURRENT_ANALYSES = 32
+
 # Prompt version belongs with prompt artifacts, but we keep a fallback here
 # only if we want config to print a complete runtime snapshot later.
 # (We still treat backend/core/prompt.py as the source of truth.)

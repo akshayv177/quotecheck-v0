@@ -1,6 +1,6 @@
 # CURRENT_STATE.md
 
-Last updated: 2026-09-28 (QC-HOTFIX-demo-question-bound)
+Last updated: 2026-10-01 (SCALE-006)
 
 Short, factual snapshot of what exists right now. Update this file (and this date
 line) in any ticket that changes capabilities, commands, or gaps.
@@ -21,6 +21,23 @@ JSONL log record per request.
   (500). A `RequestValidationError` handler (QC-2A) renders oversized/empty/malformed
   requests in the same body shape with `"code": "invalid_request"` (HTTP 422) — not a
   new `FailureCategory`.
+  SCALE-004: `POST /analyze` is an `async def` wrapper around the unchanged
+  synchronous analysis body (`_analyze_sync`, run via `run_in_threadpool`). In
+  OpenAI mode it takes a provider-admission slot on the event loop **before**
+  threadpool dispatch; when none is free it immediately returns `capacity_exceeded`
+  (503, `retryable: true`) with zero provider calls and one log record
+  (`provider_attempts: 0`). The slot is released once the admitted work's worker
+  thread has returned (retry included); the admitted work runs in its own task behind
+  `asyncio.shield`, so a cancelled request still holds its slot until its provider
+  call ends. Demo mode takes no slot. Because the endpoint is async, FastAPI's
+  `response_model` validation now runs on the event loop, and the `QuoteCheckError`
+  handler is `async` — neither takes a worker token any more. `GET /health` and the
+  `RequestValidationError` handler remain sync (one worker token each).
+- `backend/core/admission.py` — SCALE-004 `ProviderAdmission`: a lock-protected,
+  non-blocking slot counter (`try_acquire()` / `release()`, underflow raises) and the
+  process-wide instance `provider_admission` (capacity
+  `OPENAI_MAX_CONCURRENT_ANALYSES`), built eagerly at import. Per process: N server
+  processes would each have their own budget. No queue, no waiting.
 - `backend/core/schema.py` — Pydantic contract (`AnalyzeRequest`, `QuoteCheckResult`
   and nested models: line items, risk levels, uncertainty markers, refusals, metadata).
   `AnalyzeRequest.quote_text` is bounded `1..MAX_QUOTE_TEXT_CHARS` (QC-2A; 12,000
@@ -38,7 +55,11 @@ JSONL log record per request.
   `schema_export.py`), then mandatory final Pydantic validation of the response;
   server overrides metadata. Default model `gpt-4o-mini` (`QUOTECHECK_MODEL`).
   QC-4: the SDK client is built with an explicit bounded `timeout`
-  (`QUOTECHECK_OPENAI_TIMEOUT_SECONDS`, default 30s) and `max_retries=0`; a small
+  (`QUOTECHECK_OPENAI_TIMEOUT_SECONDS`, default 30s) and `max_retries=0`. SCALE-002:
+  that client is one process-wide instance (`_get_client()`), built lazily and
+  lock-guarded on the first OpenAI-mode request that passes config validation —
+  never in Demo mode — and reused (with its httpx keep-alive pool) for every later
+  request; it is not explicitly closed. A small
   no-backoff loop here retries **once**, only for transient connection / timeout /
   provider-5xx failures (max 2 provider calls per request). Response state is
   inspected explicitly — refusal, incomplete/failed, empty structured content, and
@@ -46,8 +67,9 @@ JSONL log record per request.
   raised as a single `QuoteCheckError` (`backend/core/errors.py`); a raw SDK
   exception never escapes the module. There is no repair loop and no fallback to
   Demo output. Returns `(result, latency_ms, provider_attempts)`.
-- `backend/core/errors.py` — the QC-4 reliability model: `FailureCategory` (8
-  values), a category→(http_status, retryable, user_message) spec table, the
+- `backend/core/errors.py` — the QC-4 reliability model: `FailureCategory` (9
+  values since SCALE-004 added the application-owned `capacity_exceeded`: 503,
+  retryable, distinct from the `provider_*` categories), a category→(http_status, retryable, user_message) spec table, the
   `QuoteCheckError` exception (carries `cause` for tests but only ever logs
   `cause_type`), `classify_openai_exception`, `is_transient_openai_exception`, and
   `error_response_body`. One module, no hierarchy.
@@ -73,7 +95,11 @@ JSONL log record per request.
   an explicitly-set-but-empty value all raise at import; unset → the local Vite dev
   server on both hostnames), and fixed code constants `DEMO_ANALYZER_MODEL`,
   `OPENAI_MAX_RETRIES = 1`, `OPENAI_MAX_ATTEMPTS = 2` (retry count is deliberately not
-  env-overridable — it affects cost and request amplification). `OPENAI_API_KEY` is
+  env-overridable — it affects cost and request amplification), and (SCALE-004)
+  `OPENAI_MAX_CONCURRENT_ANALYSES = 32` — the per-process provider admission budget,
+  also deliberately not env-overridable, kept below anyio's 40-token default worker
+  limiter (test-enforced). 32 is a local measurement point, not an OpenAI/host
+  capacity claim. `OPENAI_API_KEY` is
   read but never validated at startup — Demo mode starts and serves with the key
   absent; it is required only when the OpenAI path actually executes. Loaded from
   untracked `backend/.env` (template: `backend/.env.example`); if `backend/.env`
@@ -85,7 +111,11 @@ JSONL log record per request.
   `provider_status`, `provider_request_id`, `response_status`, `incomplete_reason`,
   `provider_attempts` (the actual number of provider calls made). `error` is a
   short application-authored string — never a raw exception dump, traceback, request
-  body, or API key.
+  body, or API key. `latency_ms` measures a different interval on each path (see
+  `docs/scalability/SCALE-005_RUNTIME_CONTRACT.md` §6.2). On OpenAI success it is
+  provider-loop time only. On failure it is `_analyze_sync` time. On a rejection it
+  is entry-to-log time. On Demo success it is ≈ 0 (taken before the stub runs). No
+  token usage is logged.
 - `backend/core/schema_export.py` — JSON Schema export used by the OpenAI analyzer.
 - `frontend/src/App.jsx` — entire UI: textarea → Analyze → quote-understanding
   report (report header with a derived risk-count strip, summary card, then one
@@ -276,8 +306,7 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   was not taken. Still open: no public rate limiting / quota control, and no durable
   or centralized logging (hosted run logs are local and ephemeral). OpenAI mode
   remains an optional repository capability — not the path observed in the public
-  deployment and not exposed anonymously. QC-5 (final public inspection) is the next
-  task.
+  deployment and not exposed anonymously.
 - No semantic repair when model output fails schema validation: it is reported as
   `invalid_model_output` and never patched or re-requested (deliberate — QC-4). No
   bounded repair-retry either.
@@ -310,6 +339,209 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
 - Missing information is represented at the top level (`things_to_verify`,
   `missing_quote_context`) rather than per line item.
 
+### Changed in SCALE-006
+
+**v1 closure: verification and documentation only.** No `backend/`, `frontend/`,
+`eval/`, `benchmarks/`, dependency or deployment change. ₹0.
+
+- **Closure document.** `docs/scalability/SCALE-006_V1_CLOSURE.md` contains:
+  - the SCALE-001–005 story;
+  - the final runtime contract and cost boundary;
+  - the local operating envelope;
+  - every accepted limitation with its revisit trigger;
+  - Decision Gate F: **passed**.
+- **Final regression at `0e039ca`.** The results:
+  - 201 unit tests OK;
+  - corpus validation 27 cases, 0 errors;
+  - Demo eval 27/27 schema-valid and 24/27, with residuals `AUTO-004`, `CONT-003` and
+    `HVAC-003`;
+  - frontend lint and build clean;
+  - a local Demo `/health` and `/analyze` smoke.
+- **Admission smoke.** `run_capacity --quick --experiment admission --gate-cap 32` ran
+  on a clean tree at `0e039ca`, with its run directory outside the repository and
+  nothing committed. Results:
+  - peak provider in-flight 32;
+  - every rejection 503 `capacity_exceeded` with zero provider calls;
+  - 2.0 attempts per admitted request under retry;
+  - every trial reconciled.
+
+  This binds the SCALE-004 admission contract to the exact closed code by commit
+  (`git_dirty: false`), instead of by attestation.
+- **Public truth sync.**
+  - `PROJECT_STATUS.md`: the test count, plus capacity, overload and cost-boundary
+    statements.
+  - `README.md`: nine failure categories (was "eight"), the reliability test counts,
+    and a "Capacity and overload" section.
+- **Merge to `main`, tag and release** await explicit user approval.
+
+### Changed in SCALE-005
+
+**Documentation and runtime contract only.** No `backend/`, `frontend/`, `eval/`,
+`benchmarks/`, dependency or deployment change. No new benchmark run. ₹0.
+
+- **v1 runtime contract.** `docs/scalability/SCALE-005_RUNTIME_CONTRACT.md` freezes it:
+  - 15 claims, each mapped to its source and an existing enforcing test or accepted
+    evidence;
+  - overload and failure semantics;
+  - the local operating envelope (SCALE-004 evidence only; not an SLA);
+  - an operator guide with JSONL commands validated against the retained SCALE-004
+    logs;
+  - a decision register (14 candidates, none required for v1 closure);
+  - Decision Gate E: **passed**.
+- **Cost claim sharpened.** QuoteCheck bounds concurrent provider work (≤ 32 per
+  process) and per-request amplification (≤ 2 attempts), and makes zero provider
+  calls for rejected, invalid and Demo requests. **Cumulative provider spend is not
+  bounded by the application.** In v1 it is bounded externally: the public
+  deployment runs Demo, OpenAI mode is opt-in and not publicly exposed, and
+  provider-account controls apply. There is no `max_output_tokens` cap and no token
+  or cost logging. Both are deferred to the first approved paid-provider exercise, or
+  to before any public OpenAI exposure.
+- **Still not implemented** (deliberately deferred or not justified; see the contract
+  §7): public/per-client rate limiting, `Retry-After`, a configurable budget,
+  admission metrics, token/cost logging, queueing, more workers or replicas,
+  cross-process coordination, an async OpenAI path.
+
+### Changed in SCALE-004
+
+**First deliberate overload/runtime change.** The report and Decision Gate D are in
+`docs/scalability/SCALE-004_ADMISSION.md`. Raw before/after evidence is in
+`benchmarks/results/SCALE-004-{before,after}/`. Local, fake provider, ₹0.
+
+- **Provider admission.** OpenAI-mode `/analyze` is bounded to
+  `OPENAI_MAX_CONCURRENT_ANALYSES = 32` admitted requests **per process**.
+  - The decision is made on the event loop, before threadpool dispatch.
+  - Excess requests get an immediate `capacity_exceeded`: 503, `retryable: true`,
+    zero provider calls, and one JSONL record with `provider_attempts: 0`.
+  - A retry stays inside its request's slot.
+  - Demo mode is unaffected and takes no slot.
+- **Execution shape.** This is coupled to admission:
+  - `/analyze` is an `async def` wrapper around the unchanged synchronous body;
+  - `response_model` validation runs on the event loop;
+  - the `QuoteCheckError` handler is `async`.
+
+  Neither of those takes a worker token any more. `/health` and the 422 handler are
+  unchanged (sync).
+- **Contract change (approved).** `FailureCategory` gains `capacity_exceeded`
+  (application-owned, distinct from `provider_*`). All other categories, retry
+  semantics, `QuoteCheckResult`, the body shape and the frontend are unchanged. The
+  frontend renders the new code generically.
+- **Eval runner.** `eval/run_eval.py` calls the route function directly. It now runs
+  the async route to completion per case (`sync_route_adapter`). Demo eval is
+  unchanged: 27/27 schema-valid and 24/27 passing.
+- **Measured locally, before vs after, same harness:**
+  - Peak provider in-flight is 32 everywhere, including retries.
+  - Excess demand is rejected in about 1.5 ms p50 (sustained) or ≤ 181 ms p95
+    (simultaneous bursts), instead of waiting up to a full provider period.
+  - `/health` p95 under C = 40/64 overload falls from 2.2–4.7 s to 3.5–28 ms.
+  - Admitted p95 at 5 s / C=64 falls from 10.4 s to 5.3 s.
+  - The price is about 20% lower peak completed throughput under saturation
+    (32 / latency instead of 40 / latency).
+  - A zero-backoff rejection storm (~2k/s) saturates the single event loop, giving
+    `/health` p95 155 ms.
+- **Tooling:**
+  - `benchmarks/run_capacity.py --experiment admission [--gate-cap N]`, with
+    rejection-aware reconciliation and join;
+  - an `admission` block in `stats.py` summaries (only for rejection-aware trials,
+    so historical `--check` is unchanged);
+  - `benchmarks/diag_rejection_log.py`.
+- **Tests:** 201 in the suite (was 183):
+  - 13 in `eval/tests/test_provider_admission.py`;
+  - 3 harness tests;
+  - 2 eval-adapter tests;
+  - one new `_ROUTE_CASES` row.
+- **Still not implemented:** public or per-client rate limiting, cross-process
+  coordination, a configurable budget, and admission metrics beyond the JSONL
+  record.
+
+### Changed in SCALE-003
+
+**Measurement only.** No `backend/`, frontend, config, dependency or deployment
+change. The report is `docs/scalability/SCALE-003_SATURATION.md`, with raw evidence
+in `benchmarks/results/SCALE-003-saturation/`. Local, fake provider, ₹0.
+
+- **Fake-provider repair:**
+  - `benchmarks/fake_provider.py` sets `TCP_NODELAY` on accepted sockets. This
+    removes the ~40 ms reused-connection artifact: shared-SDK p50 went from
+    43.98 to 1.00 ms (`python -m benchmarks.diag_keepalive`).
+  - SCALE-001/002 used the original fake. Their provider-loop latencies aren't
+    directly interchangeable with SCALE-003's.
+- **Harness additions (tooling only):**
+  - The fake keeps a per-attempt monotonic timestamp log (`GET /__attempts`).
+  - The new `saturation` / `health` / `retry_sat` experiments split each request
+    into time before, during and after its provider calls.
+  - Timeline helpers and a health summary are in `stats.py`.
+  - `env.json` records clocks and harness file hashes.
+  - `--experiment all` still means the SCALE-001 set.
+  - Historical `stats --check` still passes.
+- **Tests:** 183 in the suite (was 172). There are 11 new benchmark-tooling tests
+  (30 in `test_benchmarks.py`), with no latency thresholds.
+- **Findings** (Decision Gate C; no mechanism implemented):
+  - **Worker tokens.** `/analyze` takes an anyio worker token for the endpoint,
+    and a second one for `response_model` validation. The sync `QuoteCheckError`
+    handler also takes one on failure. `/health` takes one. All share the default
+    FIFO `CapacityLimiter(40)`.
+  - **Above 40 in flight:**
+    - Throughput plateaus at about 40 / provider latency: 7.75 rps at 5 s,
+      dipping to 7.24 rps at C=64.
+    - Excess demand waits silently, never failing. Mean waiting is 2.9 s at
+      5 s / C=64. About 20% of requests wait more than half a provider period
+      *after* their provider call finished.
+  - **`/health`** returns 200 but at C ≥ 40 waits for a freed token. p95 is
+    2.4–2.8 s with a 3 s provider and 4.4–4.7 s with a 5 s provider. It is
+    unaffected at C=32.
+  - **Retry.** A transient-failure retry holds the token for 2 provider periods,
+    halving throughput (0.51×). A persistent outage at C=64 yields 503s after a
+    p50 of 11.8 s.
+  - QuoteCheck still has **no** explicit provider-concurrency budget, admission
+    control, overload response, or queueing signal.
+
+### Changed in SCALE-002
+
+One process-wide OpenAI SDK client replaces per-request `OpenAI(...)` construction
+(`backend/core/openai_analyzer.py`). **Client lifetime only.** The following are
+unchanged:
+
+- timeout and `max_retries=0`
+- the one application retry and 2-attempt bound, with no retry on 429
+- the failure taxonomy and `provider_attempts`
+- mandatory validation and no Demo fallback
+- API, logging, prompt and schema
+- `app.py` and `config.py`
+- dependencies and deployment
+
+No billed call was made, and the public deployment was not load-tested.
+
+- **Lifecycle:**
+  - The client is built lazily, and only after the API-key and timeout checks
+    pass. A config error still raises `configuration_error` with no client
+    built, and Demo mode never builds one.
+  - A double-checked lock builds exactly one client under a concurrent cold
+    start.
+  - There is no shutdown hook.
+  - Config values are fixed at first use. They were already import-time
+    constants, so there is no production difference.
+- **Tests:** the suite now has 172 tests (was 166 after the hotfix merge):
+  - `SharedClientLifecycleTests` covers reuse, concurrent cold start, retry on
+    the shared client, config checks before the cached client, and isolation.
+  - A real-SDK loopback test shows 3 requests reusing 1 TCP connection.
+  - The Demo test asserts that no client is built.
+  - Tests reset the singleton with `mock.patch`, after explicitly closing any
+    client they built.
+- **Benchmark metadata:** `run_capacity.py` records `harness_origin` (SCALE-001)
+  and `measurement_ticket` (new `--ticket` flag) instead of a fixed `ticket`.
+  No measurement logic changed.
+- **Recharacterization:** `docs/scalability/SCALE-002_SHARED_CLIENT.md`, with raw
+  evidence in `benchmarks/results/SCALE-002-{before,after}/`. Local, fake
+  provider, comparative only.
+  - At 250 ms / C=64: 46.6 → 102.1 rps, p95 2147 → 863 ms, server CPU per
+    request 469 → 5.7 ms, and no new provider connection per request.
+  - The next constraint is the implicit anyio 40-thread limit: peak in-flight is
+    pinned at 40, and QuoteCheck has no explicit provider-concurrency budget or
+    overload policy.
+  - The loopback fake provider adds about 40 ms per request on reused
+    connections (Nagle's algorithm on its socket). This benchmark artifact makes
+    the after-run gains an understatement. It is recorded, not fixed.
+
 ### Fixed in QC-HOTFIX-demo-question-bound
 
 - Bug: a quote matching three or more Demo keyword blocks (each adds 3
@@ -328,6 +560,51 @@ provider timeout; a non-numeric / zero / negative value is rejected as a
   3 fail on `main`, and all 4 pass after the fix. The suite has 148 tests. Demo eval is unchanged
   (27/27 schema-valid, 24/27 deterministic, residuals `AUTO-004`/`CONT-003`/`HVAC-003`).
   No OpenAI-mode, prompt, API, frontend, or deployment change.
+
+### Added in SCALE-001
+
+A local, zero-provider-cost capacity-characterization harness (`benchmarks/`)
+and a measured baseline (`docs/scalability/SCALE-001_BASELINE.md`, raw evidence
+in `benchmarks/results/SCALE-001-baseline/`). **Measurement only: no runtime,
+API, schema, prompt, retry/timeout, logging, deployment, dependency or product
+change.** No billed OpenAI call was made, and the public deployment was never
+load-tested.
+
+- **Harness:**
+  - `python -m benchmarks.run_capacity` launches unmodified QuoteCheck as one
+    uvicorn process on 127.0.0.1 (`--loop asyncio --http h11`, matching the
+    production install) and drives a closed-loop concurrency ladder through
+    real localhost HTTP.
+  - OpenAI-mode runs reach a loopback fake Responses endpoint
+    (`benchmarks/fake_provider.py`) through the SDK's own `OPENAI_BASE_URL`,
+    with a sentinel key and model.
+  - Every fake-provider trial is reconciled against QuoteCheck's own
+    `provider_attempts` log.
+  - `python -m benchmarks.stats <run-dir> --check` recomputes summaries from
+    the raw JSONL.
+  - `python -m benchmarks.diag_client_construction` isolates the cost of
+    per-request client construction.
+  - Harness tests are in `eval/tests/test_benchmarks.py` (18 tests).
+- **Findings (local WSL2 host, comparative only, not a production SLA):**
+  - Demo `/analyze` is single-core CPU-bound and flat from C=1–2: about 950 /
+    600–650 / 105 rps for 85 / 641 / 11,465-char inputs.
+  - On the OpenAI path, per-request `OpenAI(...)` construction (SSL context and
+    CA bundle, about 20 ms CPU serially, degrading under thread concurrency)
+    is a major throughput constraint under concurrency; with the 250 ms fake provider, throughput plateaued at about 35–41 analyses/s despite additional concurrency.
+  - Aggregate provider concurrency is bounded only implicitly, by anyio's
+    default 40-thread limiter: peak in flight was 40 at C = 48 and 64.
+  - The two-attempt retry bound holds, and retries double attempts per request
+    while QuoteCheck has no explicit application-level aggregate provider-concurrency budget.
+  - Decision Gate A candidate: reuse one OpenAI client per process (a separate
+    ticket; not implemented).
+- **Pre-existing defect found, not fixed:** the Demo analyzer can emit more
+  than the schema's 8 `verification_questions` for a quote that mixes
+  several trades (e.g. a 127-char brake + AC + tap + panel-earthing +
+  compressor quote), raising a Pydantic `ValidationError`. The route turns this
+  into HTTP 500 `internal_error`. It is recorded in the SCALE-001 review bundle.
+- Demo-mode `metadata.latency_ms` and the logged `latency_ms` are computed
+  before the stub runs (`backend/app.py:193`), so they are ~0 by construction
+  and don't measure analysis time. Recorded, not changed.
 
 ### Added in QC-5R
 

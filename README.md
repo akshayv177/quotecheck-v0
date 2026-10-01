@@ -16,6 +16,7 @@ against the same `QuoteCheckResult` contract as the OpenAI path.
 [Engineering highlights](#engineering-highlights) ·
 [Architecture](#architecture) ·
 [Evaluation](#evaluation) ·
+[Capacity](#capacity-and-overload) ·
 [Live deployment](#live-deployment) ·
 [Limitations](#limitations) ·
 [Run locally](#run-locally)
@@ -98,12 +99,16 @@ are in [`examples/README.md`](examples/README.md).
   `prompt_version`, `model`, `created_at`, `latency_ms`, and `schema_valid`; the UI
   badge and the run logs are derived from the same field, so a Demo response can never
   claim an OpenAI model produced it.
-- **Structured failure taxonomy.** Eight failure categories, each mapped once to an
+- **Structured failure taxonomy.** Nine failure categories (eight provider/runtime
+  categories plus the application-owned `capacity_exceeded`), each mapped once to an
   HTTP status, a `retryable` flag, and a user-safe message — no stack traces, keys, or
   raw provider payloads reach the client.
 - **Bounded timeout and retry.** Explicit per-attempt timeout (default 30s, against the
   SDK's 600s default), SDK retries disabled, at most one application-owned retry for
   transient failures — **maximum two provider calls per request**.
+- **Explicit provider admission.** At most 32 OpenAI-mode analyses per process run at
+  once; excess requests are rejected immediately with `capacity_exceeded` and make no
+  provider call. See [Capacity and overload](#capacity-and-overload).
 - **Versioned prompt artifacts.** `PROMPT_VERSION` (`quotecheck_v0.4`) ships in both
   API responses and run logs, so a prompt change is traceable as a product change.
 - **Exact-origin CORS.** Comma-separated exact browser origins parsed with
@@ -170,8 +175,9 @@ Failures use one stable, user-safe envelope:
 ```
 
 Provider transport failures, refusals, incomplete generations, invalid model output,
-configuration errors, internal errors, and request validation are each classified
-explicitly under their own `code`. `retryable` means a manual retry may reasonably
+configuration errors, internal errors, request validation, and QuoteCheck's own
+capacity rejection (`capacity_exceeded`, HTTP 503) are each classified explicitly under
+their own `code`. `retryable` means a manual retry may reasonably
 succeed — it does *not* mean QuoteCheck retried automatically.
 
 The result contract itself is defined in `backend/core/schema.py`;
@@ -199,8 +205,46 @@ OpenAI-path failures are explicit and bounded rather than swallowed:
   name — never a raw exception dump, API key, or provider payload.
 
 This is failure *handling*, not high availability: there is no SLA, no automatic
-recovery, and no durable or centralized logging. The behaviour is covered by 42 stdlib
-unit tests that patch the provider boundary (no billed calls).
+recovery, and no durable or centralized logging. The behaviour is covered by stdlib
+unit tests that patch the provider boundary (no billed calls): 47 in
+`eval/tests/test_openai_reliability.py`, plus 13 provider-admission tests in
+`eval/tests/test_provider_admission.py`.
+
+---
+
+## Capacity and overload
+
+QuoteCheck v1 has an explicit, evidence-backed application capacity boundary and
+predictable overload behaviour. Before this work, excess demand relied on incidental
+framework queueing.
+
+- **Bounded provider concurrency.** In OpenAI mode, at most **32 analyses per server
+  process** are admitted to the provider at once. This is a fixed code constant. It
+  applies per process: more workers or replicas would multiply it.
+- **Fail-fast overload, no queue.** When all slots are busy, a request is rejected
+  immediately with HTTP 503 `capacity_exceeded` (`retryable: true`). It makes zero
+  provider calls. The code is distinct from any provider failure.
+- **Retries stay inside the budget.** An admitted request makes at most two provider
+  attempts, and both use the same slot.
+- **Demo mode is unaffected.** It makes no provider calls and takes no slot.
+
+Measured locally against a simulated provider, comparing the system just before
+explicit admission was added (SCALE-004) with the system just after it. This is not a
+comparison with the original v0 baseline. Results:
+
+- excess requests are rejected in milliseconds instead of waiting silently for up to
+  several provider periods;
+- `/health` stays responsive under overload (p95 from seconds to tens of ms);
+- admitted requests take about one provider period instead of two or three.
+
+The price is about 20% lower peak throughput under saturation.
+
+**These are local, simulated measurements.** They are not an SLA, and not OpenAI or
+Railway capacity. The budget bounds concurrent and per-request provider work, **not**
+cumulative spend over time: there is no spending quota, no output-token cap and no
+public rate limiting. That is one reason OpenAI mode is not publicly exposed. The
+evidence and the full list of limitations are in
+[`docs/scalability/SCALE-006_V1_CLOSURE.md`](docs/scalability/SCALE-006_V1_CLOSURE.md).
 
 ---
 
@@ -284,6 +328,9 @@ anonymous access to paid inference.
 - Hosted `logs/app_runs.jsonl` is written to the platform's local, ephemeral
   filesystem — not durable or centralized observability.
 - No public rate limiting or quota control.
+- The 32-slot provider budget is per process and locally measured with a simulated
+  provider; real OpenAI latency, rate limits and cost have not been characterized, and
+  cumulative provider spend is not bounded by the application.
 - OpenAI mode exists as a repository capability but was **not** the path observed in
   the hosted public verification; it stays a local, opt-in mode.
 - The deterministic Demo analyzer is a narrow keyword heuristic, and the shared
@@ -313,6 +360,8 @@ For local setup, Demo and OpenAI mode configuration, and the verification steps,
   and baseline.
 - [`docs/LOCAL_DEMO.md`](docs/LOCAL_DEMO.md) — local run and development guide.
 - [`examples/README.md`](examples/README.md) — six real captured Demo-mode reports.
+- [`docs/scalability/SCALE-006_V1_CLOSURE.md`](docs/scalability/SCALE-006_V1_CLOSURE.md)
+  — v1 scalability story, runtime contract, local evidence, and limitations.
 - [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) — detailed technical baseline and
   the per-ticket implementation history (long; written for contributors).
 

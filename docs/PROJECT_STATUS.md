@@ -37,9 +37,20 @@ file is a summary, not a replacement for either.
   deterministic checks passing**; the three known residuals (`AUTO-004`, `CONT-003`,
   `HVAC-003`) are retained, not excluded. Two permanent regression cases guard domain
   leakage and unsupported price judgment.
-- **Harness self-tests.** ~144 stdlib `unittest` tests
-  (`python -m unittest discover -s eval/tests -p 'test_*.py'`), reproduced during the
-  QC-5 inspection.
+- **Harness self-tests.** 201 stdlib `unittest` tests
+  (`python -m unittest discover -s eval/tests -p 'test_*.py'`), run during the
+  SCALE-006 v1 closure (144 at the v0 QC-5 inspection).
+- **Explicit capacity boundary and predictable overload (v1).** In OpenAI mode, at
+  most 32 analyses per process are admitted to the provider at once. Excess requests
+  are rejected immediately with HTTP 503 `capacity_exceeded` (`retryable: true`) and
+  make zero provider calls; there is no queue. Each admitted request makes at most two
+  provider attempts, and a retry stays inside its slot. Demo mode is unaffected.
+  Before explicit admission (pre-SCALE-004), excess demand waited silently in the
+  framework's worker pool and `/health` slowed with provider latency. The budget,
+  the before/after evidence and the limitations are in
+  [`docs/scalability/SCALE-006_V1_CLOSURE.md`](scalability/SCALE-006_V1_CLOSURE.md).
+  All of it was measured locally against a simulated provider: it is not an SLA, and
+  not a statement of OpenAI or Railway capacity.
 - **Live public Demo deployment.** Frontend on Vercel
   (`https://quotecheck-frontend.vercel.app`) and backend on Railway
   (`https://quotecheck-v0-production.up.railway.app`), verified end-to-end in the
@@ -78,7 +89,7 @@ file is a summary, not a replacement for either.
   reproducibility depends on the developer using a compatible Python 3.10+
   environment.
 - **Semantic grading is still manual, and there is no CI.** The deterministic
-  Layer A eval runner and the ~144 stdlib harness tests exist and run, but Layer B
+  Layer A eval runner and the 201 stdlib harness tests exist and run, but Layer B
   (semantic faithfulness / calibration / usefulness) is a human pass against
   `eval/rubric.md`, and nothing runs automatically on push or PR.
 - **The public deployment is a portfolio Demo, not a service.** No scale or uptime
@@ -87,6 +98,18 @@ file is a summary, not a replacement for either.
   no public rate limiting / quota control. The observed hosted path is the
   deterministic Demo analyzer; OpenAI mode is a local, opt-in repository capability and
   was not the observed public path.
+- **Capacity limits are per process and locally measured.** The 32-slot provider
+  budget applies to each server process; more workers or replicas would multiply it,
+  and nothing coordinates across processes. It has no `Retry-After` hint and no
+  per-client fairness. A client that resends rejected requests with no backoff can
+  saturate the single event loop. Real OpenAI latency, rate limits and cost have not
+  been measured (all v1 measurement was ₹0, against a simulated provider).
+- **Cost is bounded per request and in concurrency, not over time.** QuoteCheck caps
+  concurrent provider work (32 per process) and provider calls per request (2), and
+  rejected or Demo requests make no provider calls. It does **not** cap cumulative
+  spend: there is no spending quota, no output-token cap and no token/cost logging.
+  In v1, spend is bounded by keeping the public deployment in Demo mode and by
+  provider-account controls outside the application.
 - **No repair/retry on schema-validation failure** if a model output doesn't match
   the contract.
 - **No market-price benchmarking and no objective price-fairness judgment.**
@@ -98,6 +121,10 @@ file is a summary, not a replacement for either.
 
 - This is **not** a production-ready system: no SLAs, no hardening, no scale
   guarantees, no uptime commitments.
+- The v1 capacity numbers (32-slot budget, rejection and `/health` latencies,
+  throughput) come from a local machine and a simulated provider. They are **not**
+  OpenAI capacity, Railway capacity or a throughput guarantee, and the provider
+  budget does **not** bound cumulative cost.
 - QuoteCheck does **not** provide professional or safety advice, and does not
   replace a qualified professional's judgment (mechanic, contractor, technician, etc.).
 - QuoteCheck does **not** verify vendor claims or guarantee fair pricing.
@@ -116,7 +143,8 @@ Tracked as future work; none of this is implemented today:
 - CI wiring that runs the existing verification commands on push / PR (QC-5B).
 - Bounded repair/retry when a model response fails schema validation.
 - Broader, de-vehicled result taxonomy.
-- Production-scale monitoring and load testing.
+- Production monitoring, and load testing against a real provider or the hosted
+  environment (v1 capacity work was local and simulated only).
 - Public rate limiting / quota control and durable, centralized logging — required
   before OpenAI mode could ever be exposed anonymously.
 

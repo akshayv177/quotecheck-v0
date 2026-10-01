@@ -22,12 +22,22 @@ assumed to contain a usable structured result — refusal, incomplete, empty, an
 malformed responses are each classified explicitly. Final Pydantic validation
 against ``QuoteCheckResult`` is mandatory and is never repaired with a second
 call or invented defaults.
+
+Client lifetime (SCALE-002)
+---------------------------
+One synchronous ``OpenAI`` client is shared by every request in the process.
+It is built lazily on the first OpenAI-mode request that passes configuration
+validation (so Demo mode never builds one and needs no credential), under a lock
+so simultaneous cold requests construct exactly one. Its arguments are the same
+import-time settings as before, so per-attempt timeout and ``max_retries=0`` are
+unchanged. The client is not explicitly closed; it lives as long as the process.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
@@ -74,6 +84,28 @@ def resolve_openai_timeout_seconds() -> float:
             detail="invalid QUOTECHECK_OPENAI_TIMEOUT_SECONDS (must be finite and > 0)",
         )
     return value
+
+
+# Process-wide SDK client (SCALE-002); see the module docstring.
+_client: Optional[OpenAI] = None
+_client_lock = threading.Lock()
+
+
+def _get_client(timeout_seconds: float) -> OpenAI:
+    """Return the shared client, constructing it once on first use.
+
+    Callers must validate configuration first: no client is built for an
+    invalid or missing setting.
+    """
+    global _client
+    client = _client
+    if client is None:
+        with _client_lock:
+            if _client is None:
+                # QuoteCheck owns retries: the SDK client makes exactly one HTTP attempt.
+                _client = OpenAI(api_key=OPENAI_API_KEY, timeout=timeout_seconds, max_retries=0)
+            client = _client
+    return client
 
 
 def _refusal_text(resp: Any) -> Optional[str]:
@@ -157,8 +189,7 @@ def analyze_quote_openai(
             detail="OPENAI_API_KEY is not set",
         )
 
-    # QuoteCheck owns retries: the SDK client makes exactly one HTTP attempt.
-    client = OpenAI(api_key=OPENAI_API_KEY, timeout=timeout_seconds, max_retries=0)
+    client = _get_client(timeout_seconds)
 
     schema_obj = quotecheck_result_schema_obj()
     messages = build_messages(quote_text=quote_text)

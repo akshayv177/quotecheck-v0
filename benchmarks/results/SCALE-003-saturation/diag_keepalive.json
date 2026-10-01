@@ -1,0 +1,65 @@
+{
+  "n": 35,
+  "rows": [
+    {
+      "case": "sdk_shared",
+      "fake_tcp_nodelay": false,
+      "attempts": 35,
+      "connections_accepted": 1,
+      "p50_ms": 43.98,
+      "p95_ms": 44.91,
+      "min_ms": 43.3,
+      "max_ms": 174.0
+    },
+    {
+      "case": "sdk_shared",
+      "fake_tcp_nodelay": true,
+      "attempts": 35,
+      "connections_accepted": 1,
+      "p50_ms": 1.0,
+      "p95_ms": 1.48,
+      "min_ms": 0.86,
+      "max_ms": 1.84
+    },
+    {
+      "case": "sdk_fresh",
+      "fake_tcp_nodelay": false,
+      "attempts": 35,
+      "connections_accepted": 35,
+      "p50_ms": 1.93,
+      "p95_ms": 9.22,
+      "min_ms": 1.54,
+      "max_ms": 20.09
+    },
+    {
+      "case": "sdk_fresh",
+      "fake_tcp_nodelay": true,
+      "attempts": 35,
+      "connections_accepted": 35,
+      "p50_ms": 1.84,
+      "p95_ms": 7.56,
+      "min_ms": 1.47,
+      "max_ms": 7.59
+    },
+    {
+      "case": "raw_keepalive",
+      "fake_tcp_nodelay": false,
+      "attempts": 35,
+      "connections_accepted": 1,
+      "p50_ms": 44.01,
+      "p95_ms": 44.17,
+      "min_ms": 0.69,
+      "max_ms": 44.56
+    },
+    {
+      "case": "raw_keepalive",
+      "fake_tcp_nodelay": true,
+      "attempts": 35,
+      "connections_accepted": 1,
+      "p50_ms": 0.37,
+      "p95_ms": 0.61,
+      "min_ms": 0.32,
+      "max_ms": 1.07
+    }
+  ]
+}

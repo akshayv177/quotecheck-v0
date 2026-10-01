@@ -1,0 +1,273 @@
+[
+  {
+    "scenario": "adm_health_5000ms_nobackoff",
+    "concurrency": 0,
+    "latency_s": 5.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.84,
+      "p95_ms": 2.25,
+      "max_ms": 2.43,
+      "min_ms": 1.22,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "0": 40
+    },
+    "analysis_outstanding_at_send_min": 0
+  },
+  {
+    "scenario": "adm_health_5000ms_nobackoff",
+    "concurrency": 64,
+    "latency_s": 5.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 70.78,
+      "p95_ms": 155.38,
+      "max_ms": 222.12,
+      "min_ms": 63.33,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "9": 1,
+      "24": 1,
+      "26": 1,
+      "27": 1,
+      "31": 1,
+      "32": 35
+    },
+    "analysis_outstanding_at_send_min": 64
+  },
+  {
+    "scenario": "adm_health_lat3s",
+    "concurrency": 0,
+    "latency_s": 3.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.83,
+      "p95_ms": 2.19,
+      "max_ms": 2.45,
+      "min_ms": 1.43,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "0": 40
+    },
+    "analysis_outstanding_at_send_min": 0
+  },
+  {
+    "scenario": "adm_health_lat3s",
+    "concurrency": 32,
+    "latency_s": 3.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.9,
+      "p95_ms": 3.56,
+      "max_ms": 15.25,
+      "min_ms": 1.44,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "16": 1,
+      "27": 1,
+      "31": 2,
+      "32": 36
+    },
+    "analysis_outstanding_at_send_min": 32
+  },
+  {
+    "scenario": "adm_health_lat3s",
+    "concurrency": 40,
+    "latency_s": 3.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.85,
+      "p95_ms": 27.76,
+      "max_ms": 32.6,
+      "min_ms": 1.22,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "7": 1,
+      "16": 1,
+      "17": 1,
+      "25": 1,
+      "32": 36
+    },
+    "analysis_outstanding_at_send_min": 32
+  },
+  {
+    "scenario": "adm_health_lat3s",
+    "concurrency": 64,
+    "latency_s": 3.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.76,
+      "p95_ms": 6.68,
+      "max_ms": 118.94,
+      "min_ms": 1.13,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "4": 1,
+      "12": 1,
+      "32": 38
+    },
+    "analysis_outstanding_at_send_min": 32
+  },
+  {
+    "scenario": "adm_health_lat5s",
+    "concurrency": 0,
+    "latency_s": 5.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.86,
+      "p95_ms": 2.49,
+      "max_ms": 3.21,
+      "min_ms": 1.56,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "0": 40
+    },
+    "analysis_outstanding_at_send_min": 0
+  },
+  {
+    "scenario": "adm_health_lat5s",
+    "concurrency": 32,
+    "latency_s": 5.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.93,
+      "p95_ms": 4.35,
+      "max_ms": 17.38,
+      "min_ms": 1.53,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "23": 1,
+      "29": 1,
+      "30": 1,
+      "32": 37
+    },
+    "analysis_outstanding_at_send_min": 32
+  },
+  {
+    "scenario": "adm_health_lat5s",
+    "concurrency": 40,
+    "latency_s": 5.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.98,
+      "p95_ms": 3.54,
+      "max_ms": 29.99,
+      "min_ms": 1.52,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "3": 1,
+      "5": 1,
+      "32": 38
+    },
+    "analysis_outstanding_at_send_min": 32
+  },
+  {
+    "scenario": "adm_health_lat5s",
+    "concurrency": 64,
+    "latency_s": 5.0,
+    "all_probes": {
+      "n": 40,
+      "p50_ms": 1.78,
+      "p95_ms": 3.86,
+      "max_ms": 167.67,
+      "min_ms": 1.08,
+      "status_counts": {
+        "200": 40
+      },
+      "timeouts": 0
+    },
+    "probes_sent_at_provider_in_flight_eq_40": {
+      "n": 0,
+      "status_counts": {},
+      "timeouts": 0
+    },
+    "provider_in_flight_at_send_counts": {
+      "9": 1,
+      "30": 1,
+      "32": 38
+    },
+    "analysis_outstanding_at_send_min": 32
+  }
+]

@@ -31,6 +31,8 @@ means running the suite twice.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import inspect
 import json
 import math
 import os
@@ -147,6 +149,19 @@ def format_execution_error(exc: BaseException) -> str:
     if detail is not None and str(detail) and str(detail) not in base:
         parts.append(f"detail={detail!r}")
     return " | ".join(parts)
+
+
+def sync_route_adapter(route_fn):
+    """Call the ``/analyze`` route function synchronously, one case at a time.
+
+    Since SCALE-004 the route is an ``async def`` wrapper (provider admission runs
+    before the synchronous analysis body). The runner still calls the real route
+    function, now to completion on a fresh event loop per case, so results and
+    raised ``QuoteCheckError``s are exactly what the route produces.
+    """
+    if inspect.iscoroutinefunction(route_fn):
+        return lambda req: asyncio.run(route_fn(req))
+    return route_fn
 
 
 def run_case(
@@ -555,7 +570,7 @@ def run_suite(args: argparse.Namespace) -> int:
     for case in cases:
         results.append(
             run_case(
-                analyze,
+                sync_route_adapter(analyze),
                 AnalyzeRequest,
                 QuoteCheckResult,
                 case,

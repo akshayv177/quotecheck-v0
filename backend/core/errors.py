@@ -26,7 +26,13 @@ from typing import Any, Dict, Optional
 
 
 class FailureCategory(str, Enum):
-    """The complete set of ways an /analyze call can fail in QC-4."""
+    """The complete set of ways an /analyze call can fail (QC-4, + SCALE-004).
+
+    ``CAPACITY_EXCEEDED`` is application-owned: QuoteCheck's own provider
+    admission budget was full, so the request was rejected before any provider
+    call. It is deliberately distinct from the ``provider_*`` categories, which
+    describe what the upstream provider did.
+    """
 
     PROVIDER_TIMEOUT = "provider_timeout"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
@@ -36,6 +42,7 @@ class FailureCategory(str, Enum):
     INVALID_MODEL_OUTPUT = "invalid_model_output"
     CONFIGURATION_ERROR = "configuration_error"
     INTERNAL_ERROR = "internal_error"
+    CAPACITY_EXCEEDED = "capacity_exceeded"
 
 
 @dataclass(frozen=True)
@@ -86,6 +93,11 @@ _SPECS: Dict[FailureCategory, _CategorySpec] = {
         500,
         False,
         "Something went wrong while analyzing this quote. Please try again.",
+    ),
+    FailureCategory.CAPACITY_EXCEEDED: _CategorySpec(
+        503,
+        True,
+        "QuoteCheck is handling too many analyses right now. Please try again in a moment.",
     ),
 }
 

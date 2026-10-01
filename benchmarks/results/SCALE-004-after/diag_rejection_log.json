@@ -1,0 +1,50 @@
+{
+  "n": 5000,
+  "rejection_with_sync_log": {
+    "n": 5000,
+    "p50_ms": 0.33,
+    "p95_ms": 0.56,
+    "max_ms": 42.34,
+    "min_ms": 0.22,
+    "p99_ms": 0.73,
+    "mean_us": 366.7,
+    "p50_us": 333.1,
+    "p95_us": 557.9
+  },
+  "rejection_log_disabled": {
+    "n": 5000,
+    "p50_ms": 0.27,
+    "p95_ms": 0.51,
+    "max_ms": 1.64,
+    "min_ms": 0.16,
+    "p99_ms": 0.7,
+    "mean_us": 295.1,
+    "p50_us": 267.8,
+    "p95_us": 506.0
+  },
+  "log_call_only": {
+    "n": 5000,
+    "p50_ms": 0.03,
+    "p95_ms": 0.07,
+    "max_ms": 0.49,
+    "min_ms": 0.02,
+    "p99_ms": 0.13,
+    "mean_us": 38.0,
+    "p50_us": 29.7,
+    "p95_us": 74.2
+  },
+  "log_records_written": 5050,
+  "sync_log_share_of_rejection_mean": 0.195,
+  "response_model_validate_serialize": {
+    "n": 5000,
+    "p50_ms": 0.02,
+    "p95_ms": 0.05,
+    "max_ms": 0.3,
+    "min_ms": 0.02,
+    "p99_ms": 0.09,
+    "mean_us": 30.2,
+    "p50_us": 24.6,
+    "p95_us": 51.0
+  },
+  "response_body_bytes": 3627
+}
